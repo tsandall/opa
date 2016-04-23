@@ -90,6 +90,7 @@ func (ctx *TopDownContext) Child(rule *opalog.Rule, bindings *hashMap) *TopDownC
 	cpy.Query = rule.Body
 	cpy.Bindings = bindings
 	cpy.Previous = ctx
+	cpy.Index = 0
 	return &cpy
 }
 
@@ -763,7 +764,9 @@ func evalRefRulePartialObjectDoc(ctx *TopDownContext, ref opalog.Ref, path opalo
 		return fmt.Errorf("not implemented: %v %v %v", ref, path, rule)
 	}
 
-	if !suffix[0].IsGround() {
+	key := plugValue(suffix[0].Value, ctx.Bindings)
+
+	if !key.IsGround() {
 		child := ctx.Child(rule, newHashMap())
 		return TopDown(child, func(child *TopDownContext) error {
 			key := child.Bindings.Get(rule.Key.Value)
@@ -780,7 +783,7 @@ func evalRefRulePartialObjectDoc(ctx *TopDownContext, ref opalog.Ref, path opalo
 	}
 
 	bindings := newHashMap()
-	bindings.Put(rule.Key.Value, suffix[0].Value)
+	bindings.Put(rule.Key.Value, key)
 	child := ctx.Child(rule, bindings)
 
 	return TopDown(child, func(child *TopDownContext) error {
@@ -804,7 +807,9 @@ func evalRefRulePartialSetDoc(ctx *TopDownContext, ref opalog.Ref, path opalog.R
 		return nil
 	}
 
-	if !suffix[0].IsGround() {
+	key := plugValue(suffix[0].Value, ctx.Bindings)
+
+	if !key.IsGround() {
 		child := ctx.Child(rule, newHashMap())
 		return TopDown(child, func(child *TopDownContext) error {
 			value := child.Bindings.Get(rule.Key.Value)
@@ -816,15 +821,16 @@ func evalRefRulePartialSetDoc(ctx *TopDownContext, ref opalog.Ref, path opalog.R
 			// so that expression will be defined. E.g., given a simple rule:
 			// "p = true :- q[x]", we say that "p" should be defined if "q"
 			// is defined for some value "x".
-			ctx = ctx.BindVar(suffix[0].Value.(opalog.Var), value)
+			ctx = ctx.BindVar(key.(opalog.Var), value)
 			ctx = ctx.BindRef(ref[:len(path)+1], opalog.Boolean(true))
 			return iter(ctx)
 		})
 	}
 
 	bindings := newHashMap()
-	bindings.Put(rule.Key.Value, suffix[0].Value)
+	bindings.Put(rule.Key.Value, key)
 	child := ctx.Child(rule, bindings)
+
 	return TopDown(child, func(child *TopDownContext) error {
 		// See comment above for explanation of why the reference is bound to true.
 		ctx = ctx.BindRef(ref[:len(path)+1], opalog.Boolean(true))
@@ -856,32 +862,47 @@ func evalRefRuleResult(ctx *TopDownContext, ref opalog.Ref, suffix opalog.Ref, r
 
 	case opalog.Array:
 		if len(suffix) > 0 {
-			return result.Query(suffix, func(keys map[opalog.Var]opalog.Value, value opalog.Value) error {
+			var pluggedSuffix opalog.Ref
+			for _, t := range suffix {
+				pluggedSuffix = append(pluggedSuffix, plugTerm(t, ctx.Bindings))
+			}
+			result.Query(pluggedSuffix, func(keys map[opalog.Var]opalog.Value, value opalog.Value) error {
 				ctx = ctx.BindRef(ref, value)
 				for k, v := range keys {
 					ctx = ctx.BindVar(k, v)
 				}
 				return iter(ctx)
 			})
+			// Ignore the error code. If the suffix references a non-existent document,
+			// the expression is undefined.
+			return nil
 		}
-		ctx.BindRef(ref, result)
-		return iter(ctx)
+		// This can't be hit because we have checks in the evalRefRule* functions that catch this.
+		panic(fmt.Sprintf("illegal value: %v %v %v", ref, suffix, result))
 
 	case opalog.Object:
 		if len(suffix) > 0 {
-			return result.Query(suffix, func(keys map[opalog.Var]opalog.Value, value opalog.Value) error {
+			var pluggedSuffix opalog.Ref
+			for _, t := range suffix {
+				pluggedSuffix = append(pluggedSuffix, plugTerm(t, ctx.Bindings))
+			}
+			result.Query(pluggedSuffix, func(keys map[opalog.Var]opalog.Value, value opalog.Value) error {
 				ctx = ctx.BindRef(ref, value)
 				for k, v := range keys {
 					ctx = ctx.BindVar(k, v)
 				}
 				return iter(ctx)
 			})
+			// Ignore the error code. If the suffix references a non-existent document,
+			// the expression is undefined.
+			return nil
 		}
-		ctx.BindRef(ref, result)
-		return iter(ctx)
+		// This can't be hit because we have checks in the evalRefRule* functions that catch this.
+		panic(fmt.Sprintf("illegal value: %v %v %v", ref, suffix, result))
 
 	default:
 		if len(suffix) > 0 {
+			// This is not defined because it attempts to dereference a scalar.
 			return nil
 		}
 		ctx = ctx.BindRef(ref, result)
