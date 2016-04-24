@@ -341,10 +341,7 @@ func evalEq(ctx *TopDownContext, expr *opalog.Expr, iter TopDownIterator) error 
 	a := operands[1].Value
 	b := operands[2].Value
 
-	return evalEqUnify(ctx, a, b, func(ctx *TopDownContext) error {
-		ctx.traceSuccess(expr)
-		return iter(ctx)
-	})
+	return evalEqUnify(ctx, a, b, iter)
 }
 
 func evalEqGround(ctx *TopDownContext, a opalog.Value, b opalog.Value, iter TopDownIterator) error {
@@ -610,7 +607,10 @@ func evalExpr(ctx *TopDownContext, iter TopDownIterator) error {
 			// this should never happen.
 			panic("unreachable")
 		}
-		return builtin(ctx, expr, iter)
+		return builtin(ctx, expr, func(ctx *TopDownContext) error {
+			ctx.traceSuccess(expr)
+			return iter(ctx)
+		})
 	case *opalog.Term:
 		switch tv := tt.Value.(type) {
 		case opalog.Boolean:
