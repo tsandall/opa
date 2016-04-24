@@ -231,6 +231,7 @@ func TestTopDownCompleteDoc(t *testing.T) {
 		{`object/nested composites: {"a": [1], "b": [2], "c": [3]}`,
 			`p = {"a": [1], "b": [2], "c": [3]} :- true`,
 			`{"a": [1], "b": [2], "c": [3]}`},
+		{"var/var", "p = true :- x = y", ""},
 	}
 
 	data := loadSmallTestData()
@@ -254,6 +255,7 @@ func TestTopDownPartialSetDoc(t *testing.T) {
 		{"nested composites", "p[x] :- f[i] = x", `[{"xs": [1.0], "ys": [2.0]}, {"xs": [2.0], "ys": [3.0]}]`},
 		{"deep ref/heterogeneous", "p[x] :- c[i][j][k] = x", `[null, 3.14159, true, false, true, false, "foo"]`},
 		{"composite var value", "p[x] :- x = [i, a[i]]", "[[0,1],[1,2],[2,3],[3,4]]"},
+		{"var/var", "p[x] :- x = y", "[]"},
 	}
 
 	data := loadSmallTestData()
@@ -273,6 +275,8 @@ func TestTopDownPartialObjectDoc(t *testing.T) {
 		{"composites", "p[k] = v :- d[k] = v", `{"e": ["bar", "baz"]}`},
 		{"non-string key", "p[k] = v :- a[k] = v", fmt.Errorf("cannot produce object with non-string key: 0")},
 		{"body/join var", "p[k] = v :- a[i] = v, g[k][i] = v", `{"a": 1, "b": 2, "c": 4}`},
+		{"var/var key", "p[k] = v :- v = 1, k = x", "{}"},
+		{"var/var val", `p[k] = v :- k = "x", v = x`, "{}"},
 	}
 
 	data := loadSmallTestData()

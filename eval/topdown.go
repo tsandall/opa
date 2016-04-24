@@ -275,6 +275,23 @@ func dereferenceVar(v opalog.Var, ctx *TopDownContext) (interface{}, error) {
 func evalContext(ctx *TopDownContext, iter TopDownIterator) error {
 
 	if ctx.Index >= len(ctx.Query) {
+
+		// Check if the bindings contain values that are non-ground. E.g.,
+		// suppose the query's final expression is "x = y" and "x" and "y"
+		// do not appear elsewhere in the query. In this case, "x" and "y"
+		// will be bound to each other; they will not be ground and so
+		// the proof should not be considered successful.
+		isNonGround := ctx.Bindings.Iter(func(k, v opalog.Value) bool {
+			if !v.IsGround() {
+				return true
+			}
+			return false
+		})
+
+		if isNonGround {
+			return nil
+		}
+
 		ctx.traceFinish()
 		return iter(ctx)
 	}
