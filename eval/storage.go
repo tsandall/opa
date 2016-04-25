@@ -66,15 +66,21 @@ func notFoundError(path []interface{}, f string, a ...interface{}) *StorageError
 }
 
 // Storage is the backend containing rules and data.
-type Storage map[interface{}]interface{}
+type Storage struct {
+	Indices *Indices
+	data    map[interface{}]interface{}
+}
 
 // NewStorage is a helper for creating a new, empty Storage.
 func NewStorage() Storage {
-	return Storage(map[interface{}]interface{}{})
+	return Storage{
+		Indices: NewIndices(),
+		data:    map[interface{}]interface{}{},
+	}
 }
 
 // NewStorageFromJSONFiles is a helper for creating a new Storage containing documents stored in files.
-func NewStorageFromJSONFiles(files []string) (Storage, error) {
+func NewStorageFromJSONFiles(files []string) (*Storage, error) {
 	store := NewStorage()
 	for _, file := range files {
 		f, err := os.Open(file)
@@ -97,24 +103,24 @@ func NewStorageFromJSONFiles(files []string) (Storage, error) {
 		}
 
 	}
-	return store, nil
+	return &store, nil
 }
 
 // NewStorageFromJSONObject returns Storage by converting from map[string]interface{}
-func NewStorageFromJSONObject(data map[string]interface{}) Storage {
+func NewStorageFromJSONObject(data map[string]interface{}) *Storage {
 	store := NewStorage()
 	for k, v := range data {
 		if err := store.Patch(StorageAdd, []interface{}{k}, v); err != nil {
 			panic(err)
 		}
 	}
-	return store
+	return &store
 }
 
 // Get returns the value in Storage referenced by path.
 // If the lookup fails, an error is returned with a message indicating
 // why the failure occurred.
-func (store Storage) Get(path []interface{}) (interface{}, error) {
+func (store *Storage) Get(path []interface{}) (interface{}, error) {
 
 	if len(path) == 0 {
 		return nil, notFoundError(path, nonEmptyMsg)
@@ -125,7 +131,7 @@ func (store Storage) Get(path []interface{}) (interface{}, error) {
 		return nil, notFoundError(path, stringHeadMsg)
 	}
 
-	node, ok := store[head]
+	node, ok := store.data[head]
 	if !ok {
 		return nil, notFoundError(path, doesNotExistMsg)
 
@@ -158,7 +164,7 @@ func (store Storage) Get(path []interface{}) (interface{}, error) {
 
 // MustGet returns the value in Storage reference by path.
 // If the lookup fails, the function will panic.
-func (store Storage) MustGet(path []interface{}) interface{} {
+func (store *Storage) MustGet(path []interface{}) interface{} {
 	node, err := store.Get(path)
 	if err != nil {
 		panic(err)
@@ -182,7 +188,7 @@ const (
 )
 
 // Patch modifies the store by performing the associated add/remove/replace operation on the given path.
-func (store Storage) Patch(op StorageOp, path []interface{}, value interface{}) error {
+func (store *Storage) Patch(op StorageOp, path []interface{}, value interface{}) error {
 
 	if len(path) == 0 {
 		return notFoundError(path, nonEmptyMsg)
@@ -205,7 +211,7 @@ func (store Storage) Patch(op StorageOp, path []interface{}, value interface{}) 
 	}
 }
 
-func (store Storage) add(path []interface{}, value interface{}) error {
+func (store *Storage) add(path []interface{}, value interface{}) error {
 
 	// Special case for adding a new root.
 	if len(path) == 1 {
@@ -236,7 +242,7 @@ func (store Storage) add(path []interface{}, value interface{}) error {
 
 }
 
-func (store Storage) addAppend(path []interface{}, value interface{}) error {
+func (store *Storage) addAppend(path []interface{}, value interface{}) error {
 
 	var nodeParent interface{} = store
 	if len(path) > 1 {
@@ -260,8 +266,8 @@ func (store Storage) addAppend(path []interface{}, value interface{}) error {
 	}
 
 	switch nodeParent := nodeParent.(type) {
-	case Storage:
-		nodeParent[path[len(path)-1]] = node
+	case *Storage:
+		nodeParent.data[path[len(path)-1]] = node
 	case []interface{}:
 		// This is safe because it was validated by the lookup above.
 		idx := int(path[len(path)-1].(float64))
@@ -278,7 +284,7 @@ func (store Storage) addAppend(path []interface{}, value interface{}) error {
 	return nil
 }
 
-func (store Storage) addInsertArray(path []interface{}, node []interface{}, value interface{}) error {
+func (store *Storage) addInsertArray(path []interface{}, node []interface{}, value interface{}) error {
 
 	idx, err := checkArrayIndex(path, node, path[len(path)-1])
 	if err != nil {
@@ -294,12 +300,12 @@ func (store Storage) addInsertArray(path []interface{}, node []interface{}, valu
 	}
 
 	switch nodeParent := nodeParent.(type) {
-	case Storage:
+	case *Storage:
 		node = append(node, 0)
 		copy(node[idx+1:], node[idx:])
 		node[idx] = value
 		key := path[len(path)-2]
-		nodeParent[key] = node
+		nodeParent.data[key] = node
 		return nil
 	case map[string]interface{}:
 		node = append(node, 0)
@@ -321,7 +327,7 @@ func (store Storage) addInsertArray(path []interface{}, node []interface{}, valu
 	}
 }
 
-func (store Storage) addInsertObject(path []interface{}, node map[string]interface{}, value interface{}) error {
+func (store *Storage) addInsertObject(path []interface{}, node map[string]interface{}, value interface{}) error {
 	switch last := path[len(path)-1].(type) {
 	case string:
 		node[last] = value
@@ -331,16 +337,16 @@ func (store Storage) addInsertObject(path []interface{}, node map[string]interfa
 	}
 }
 
-func (store Storage) addRoot(key interface{}, value interface{}) error {
-	store[key] = value
+func (store *Storage) addRoot(key interface{}, value interface{}) error {
+	store.data[key] = value
 	return nil
 }
 
-func (store Storage) remove(path []interface{}) error {
+func (store *Storage) remove(path []interface{}) error {
 
 	// Special case for removing a root.
 	if len(path) == 1 {
-		delete(store, path[0])
+		delete(store.data, path[0])
 		return nil
 	}
 
@@ -359,7 +365,7 @@ func (store Storage) remove(path []interface{}) error {
 	}
 }
 
-func (store Storage) removeArray(path []interface{}, node []interface{}) error {
+func (store *Storage) removeArray(path []interface{}, node []interface{}) error {
 
 	idx, err := checkArrayIndex(path, node, path[len(path)-1])
 	if err != nil {
@@ -377,9 +383,9 @@ func (store Storage) removeArray(path []interface{}, node []interface{}) error {
 	node = append(node[:idx], node[idx+1:]...)
 
 	switch nodeParent := nodeParent.(type) {
-	case Storage:
+	case *Storage:
 		key := path[len(path)-2]
-		nodeParent[key] = node
+		nodeParent.data[key] = node
 		return nil
 	case map[string]interface{}:
 		key := path[len(path)-2].(string)
@@ -405,14 +411,14 @@ func (store Storage) removeObject(path []interface{}, node map[string]interface{
 	return nil
 }
 
-func (store Storage) replace(path []interface{}, value interface{}) error {
+func (store *Storage) replace(path []interface{}, value interface{}) error {
 
 	if len(path) == 1 {
 		root := path[0]
-		if _, ok := store[root]; !ok {
+		if _, ok := store.data[root]; !ok {
 			return notFoundError(path, doesNotExistMsg)
 		}
-		store[root] = value
+		store.data[root] = value
 		return nil
 	}
 
@@ -433,7 +439,7 @@ func (store Storage) replace(path []interface{}, value interface{}) error {
 
 }
 
-func (store Storage) replaceObject(path []interface{}, node map[string]interface{}, value interface{}) error {
+func (store *Storage) replaceObject(path []interface{}, node map[string]interface{}, value interface{}) error {
 	key, err := checkObjectKey(path, node, path[len(path)-1])
 	if err != nil {
 		return err
@@ -442,7 +448,7 @@ func (store Storage) replaceObject(path []interface{}, node map[string]interface
 	return nil
 }
 
-func (store Storage) replaceArray(path []interface{}, node []interface{}, value interface{}) error {
+func (store *Storage) replaceArray(path []interface{}, node []interface{}, value interface{}) error {
 	idx, err := checkArrayIndex(path, node, path[len(path)-1])
 	if err != nil {
 		return err

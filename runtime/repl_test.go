@@ -80,13 +80,13 @@ func expectOutput(t *testing.T, output string, expected string) {
 	}
 }
 
-func newRepl(store eval.Storage, buffer *bytes.Buffer) *Repl {
+func newRepl(store *eval.Storage, buffer *bytes.Buffer) *Repl {
 	runtime := &Runtime{Store: store}
 	repl := NewRepl(runtime, "", buffer)
 	return repl
 }
 
-func newTestStorage() eval.Storage {
+func newTestStorage() *eval.Storage {
 	input := `
     {
         "a": [

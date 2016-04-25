@@ -4,8 +4,11 @@
 
 package eval
 
-import "github.com/open-policy-agent/opa/opalog"
-import "fmt"
+import (
+	"fmt"
+
+	"github.com/open-policy-agent/opa/opalog"
+)
 
 // TopDownContext contains the state of the evaluation process.
 //
@@ -18,12 +21,12 @@ type TopDownContext struct {
 	Bindings *hashMap
 	Index    int
 	Previous *TopDownContext
-	Store    Storage
+	Store    *Storage
 	Tracer   Tracer
 }
 
 // NewTopDownContext creates a new TopDownContext with no bindings.
-func NewTopDownContext(query opalog.Body, store Storage) *TopDownContext {
+func NewTopDownContext(query opalog.Body, store *Storage) *TopDownContext {
 	return &TopDownContext{
 		Query:    query,
 		Bindings: newHashMap(),
@@ -34,11 +37,7 @@ func NewTopDownContext(query opalog.Body, store Storage) *TopDownContext {
 // BindRef returns a new TopDownContext with bindings that map the reference to the value.
 func (ctx *TopDownContext) BindRef(ref opalog.Ref, value opalog.Value) *TopDownContext {
 	cpy := *ctx
-	cpy.Bindings = newHashMap()
-	ctx.Bindings.Iter(func(k opalog.Value, v opalog.Value) bool {
-		cpy.Bindings.Put(k, v)
-		return false
-	})
+	cpy.Bindings = ctx.Bindings.Copy()
 	cpy.Bindings.Put(ref, value)
 	return &cpy
 }
@@ -143,7 +142,7 @@ func TopDown(ctx *TopDownContext, iter TopDownIterator) error {
 
 // TopDownQueryParams defines input parameters for the query interface.
 type TopDownQueryParams struct {
-	Store  Storage
+	Store  *Storage
 	Tracer Tracer
 	Path   []string
 }
@@ -258,8 +257,12 @@ func ValueToInterface(v opalog.Value, ctx *TopDownContext) (interface{}, error) 
 
 type builtinFunction func(*TopDownContext, *opalog.Expr, TopDownIterator) error
 
+const (
+	equalityBuiltin = opalog.Var("=")
+)
+
 var builtinFunctions = map[opalog.Var]builtinFunction{
-	opalog.Var("="): evalEq,
+	equalityBuiltin: evalEq,
 }
 
 // dereferenceVar is used to lookup the variable binding and convert the value to
@@ -937,6 +940,7 @@ func evalRefRuleResult(ctx *TopDownContext, ref opalog.Ref, suffix opalog.Ref, r
 //
 // TODO(tsandall): extend to support indexing.
 func evalTerms(ctx *TopDownContext, iter TopDownIterator) error {
+
 	expr := ctx.Current()
 	var ts []*opalog.Term
 	switch t := expr.Terms.(type) {
@@ -947,7 +951,120 @@ func evalTerms(ctx *TopDownContext, iter TopDownIterator) error {
 	default:
 		panic(fmt.Sprintf("illegal argument: %v", t))
 	}
+
+	if tryIndex(ctx, ts) {
+
+		ref, isRef := ts[1].Value.(opalog.Ref)
+
+		if isRef && buildIndexLazy(ctx, ref) {
+			return evalTermsIndexed(ctx, iter, ref, ts[2])
+		}
+
+		ref, isRef = ts[2].Value.(opalog.Ref)
+
+		if isRef && buildIndexLazy(ctx, ref) {
+			return evalTermsIndexed(ctx, iter, ref, ts[1])
+		}
+	}
+
 	return evalTermsRec(ctx, iter, ts)
+}
+
+// TODO(tsandall) move these to better location
+
+// tryIndex returns true if the index can/should be used when evaluating this expression.
+// Indexing is used on equality expressions where both sides are non-ground refs or one
+// side is a non-ground ref and the other side is any ground term. In the future, indexing
+// may be used on references embedded inside array/object values.
+func tryIndex(ctx *TopDownContext, terms []*opalog.Term) bool {
+
+	// Indexing can only be used when evaluating equality expressions.
+	if !terms[0].Value.Equal(equalityBuiltin) {
+		return false
+	}
+
+	pluggedA := plugTerm(terms[1], ctx.Bindings)
+	pluggedB := plugTerm(terms[2], ctx.Bindings)
+
+	_, isRefA := pluggedA.Value.(opalog.Ref)
+	_, isRefB := pluggedB.Value.(opalog.Ref)
+
+	if isRefA && !pluggedA.IsGround() {
+		return pluggedB.IsGround() || isRefB
+	}
+
+	if isRefB && !pluggedB.IsGround() {
+		return pluggedA.IsGround() || isRefA
+	}
+
+	return false
+}
+
+// buildIndexLazy returns true if there is an index built for this term. If there is no index
+// currently built for the term, but the term is a candidate for indexing, ther index will be
+// built on the fly.
+func buildIndexLazy(ctx *TopDownContext, ref opalog.Ref) bool {
+
+	if ctx.Store.Indices.Contains(ref) {
+		return true
+	}
+
+	if ref.IsGround() {
+		return false
+	}
+
+	// Determine if this ref is against a base or virtual document. Only refs to base documents
+	// are indexed at this time.
+	var tmp opalog.Ref
+	for _, p := range ref[1:] {
+		if !p.Value.IsGround() {
+			break
+		}
+		tmp = append(tmp, p)
+		// This is safe because tmp only contains ground terms.
+		path, _ := tmp.Underlying()
+		r, err := ctx.Store.Get(path)
+		if err != nil {
+			return false
+		}
+		switch r.(type) {
+		case ([]*opalog.Rule):
+			return false
+		}
+	}
+
+	if err := ctx.Store.Indices.Build(ctx.Store, ref); err != nil {
+		return false
+	}
+
+	return true
+}
+
+func evalTermsIndexed(ctx *TopDownContext, iter TopDownIterator, indexed opalog.Ref, nonIndexed *opalog.Term) error {
+
+	// Evaluate the non-indexed term to obtain the value for it. This value is then used for
+	// the index lookup below.
+	return evalTermsRec(ctx, func(ctx *TopDownContext) error {
+
+		plugged := plugTerm(nonIndexed, ctx.Bindings)
+		nonIndexedValue, err := ValueToInterface(plugged.Value, ctx)
+		if err != nil {
+			return err
+		}
+
+		// Get the index for the indexed term. If the term is indexed, this should not fail.
+		index := ctx.Store.Indices.Get(indexed)
+		if index == nil {
+			return fmt.Errorf("missing index: %v", indexed)
+		}
+
+		// Iterate the bindings associated with this value.
+		return index.Iter(nonIndexedValue, func(bindings *hashMap) error {
+			ctx.Bindings = ctx.Bindings.Update(bindings)
+			return iter(ctx)
+		})
+
+	}, []*opalog.Term{nonIndexed})
 }
 
 func evalTermsRec(ctx *TopDownContext, iter TopDownIterator, ts []*opalog.Term) error {
@@ -1043,7 +1160,7 @@ func evalTermsRecObject(ctx *TopDownContext, obj opalog.Object, idx int, iter To
 	}
 }
 
-func lookup(store Storage, ref opalog.Ref) (interface{}, error) {
+func lookup(store *Storage, ref opalog.Ref) (interface{}, error) {
 	path, err := ref.Underlying()
 	if err != nil {
 		return nil, err
