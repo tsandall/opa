@@ -10,6 +10,9 @@ PACKAGES := \
 	github.com/open-policy-agent/opa/storage/.../ \
 	github.com/open-policy-agent/opa/util/.../
 
+GO := go
+GOX := gox
+
 BUILD_COMMIT := $(shell ./build/get-build-commit.sh)
 BUILD_TIMESTAMP := $(shell ./build/get-build-timestamp.sh)
 BUILD_HOSTNAME := $(shell ./build/get-build-hostname.sh)
@@ -18,7 +21,9 @@ LDFLAGS := -ldflags "-X github.com/open-policy-agent/opa/version.Vcs=$(BUILD_COM
 	-X github.com/open-policy-agent/opa/version.Timestamp=$(BUILD_TIMESTAMP) \
 	-X github.com/open-policy-agent/opa/version.Hostname=$(BUILD_HOSTNAME)"
 
-GO := go
+# Set CROSSCOMPILE to space separated list of <platform>/<arch> pairs
+# and "gox" will be used to build the binaries instead of "go".
+CROSSCOMPILE :=
 
 GO15VENDOREXPERIMENT := 1
 export GO15VENDOREXPERIMENT
@@ -36,7 +41,11 @@ generate:
 	$(GO) generate
 
 build: generate
+ifeq ($(CROSSCOMPILE),)
 	$(GO) build -o opa $(LDFLAGS)
+else
+	$(GOX) -osarch="$(CROSSCOMPILE)" $(LDFLAGS)
+endif
 
 install: generate
 	$(GO) install $(LDFLAGS)
@@ -68,3 +77,5 @@ fmt:
 
 clean:
 	rm -f ./opa
+	rm -f ./opa_linux_amd64
+	rm -f ./opa_darwin_amd64
