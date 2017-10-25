@@ -10,6 +10,8 @@ import (
 	"strings"
 	"sync"
 
+	"github.com/open-policy-agent/opa/topdown/unify"
+
 	"github.com/open-policy-agent/opa/ast"
 	"github.com/open-policy-agent/opa/metrics"
 	"github.com/open-policy-agent/opa/storage"
@@ -31,6 +33,7 @@ type Topdown struct {
 	Context  context.Context
 
 	txn      storage.Transaction
+	bindings *unify.Unifier
 	locals   *ast.ValueMap
 	refs     *valueMapStack
 	cache    *contextcache
@@ -84,6 +87,7 @@ func New(ctx context.Context, query ast.Body, compiler *ast.Compiler, store stor
 		Compiler: compiler,
 		Store:    store,
 		refs:     newValueMapStack(),
+		bindings: unify.New(),
 		txn:      txn,
 		cache:    newContextCache(),
 		qid:      qidFactory.Next(),
@@ -114,43 +118,54 @@ func (vs Vars) Equal(other Vars) bool {
 
 // Vars returns bindings for the vars in the current query
 func (t *Topdown) Vars() map[ast.Var]ast.Value {
-	result := map[ast.Var]ast.Value{}
-	t.locals.Iter(func(k, v ast.Value) bool {
-		if k, ok := k.(ast.Var); ok {
-			result[k] = v
-		}
-		return false
-	})
-	return result
+	vars := map[ast.Var]ast.Value{}
+	for _, pair := range t.bindings.Bindings() {
+		vars[pair[0].Value.(ast.Var)] = pair[1].Value
+	}
+	return vars
 }
 
 // Binding returns the value bound to the given key.
 func (t *Topdown) Binding(k ast.Value) ast.Value {
-	if _, ok := k.(ast.Ref); ok {
+	switch k := k.(type) {
+	case ast.Ref:
 		return t.refs.Binding(k)
+	case *ast.SetComprehension, *ast.ArrayComprehension, *ast.ObjectComprehension:
+		return t.locals.Get(k)
+	default:
+		v := t.bindings.Plug(ast.NewTerm(k)).Value
+		// TODO(tsandall): review need for this.
+		if v.Compare(k) == 0 {
+			return nil
+		}
+		return v
 	}
-	return t.locals.Get(k)
 }
 
 // Undo represents a binding that can be undone.
 type Undo struct {
-	Key   ast.Value
-	Value ast.Value
-	Prev  *Undo
+	Key     ast.Value
+	Value   ast.Value
+	Prev    *Undo
+	wrapped unify.Undo
 }
 
 // Bind updates t to include a binding from the key to the value. The return
 // value is used to return t to the state before the binding was added.
 func (t *Topdown) Bind(key ast.Value, value ast.Value, prev *Undo) *Undo {
-	if _, ok := key.(ast.Ref); ok {
+	switch key := key.(type) {
+	case ast.Ref:
 		return t.refs.Bind(key, value, prev)
+	case *ast.SetComprehension, *ast.ArrayComprehension, *ast.ObjectComprehension:
+		if t.locals == nil {
+			t.locals = ast.NewValueMap()
+		}
+		t.locals.Put(key, value)
+		return &Undo{key, nil, prev, nil}
+	default:
+		wrapped := unify.Unify(ast.NewTerm(key), t.bindings, ast.NewTerm(value), t.bindings)
+		return &Undo{nil, nil, prev, wrapped}
 	}
-	o := t.locals.Get(key)
-	if t.locals == nil {
-		t.locals = ast.NewValueMap()
-	}
-	t.locals.Put(key, value)
-	return &Undo{key, o, prev}
 }
 
 // Unbind updates t by removing the binding represented by the undo.
@@ -164,8 +179,8 @@ func (t *Topdown) Unbind(undo *Undo) {
 		}
 	} else {
 		for u := undo; u != nil; u = u.Prev {
-			if u.Value != nil {
-				t.locals.Put(u.Key, u.Value)
+			if u.wrapped != nil {
+				u.wrapped.Undo()
 			} else {
 				t.locals.Delete(u.Key)
 			}
@@ -188,6 +203,7 @@ func (t *Topdown) Child(query ast.Body) *Topdown {
 	cpy := t.Closure(query)
 	cpy.locals = nil
 	cpy.refs = newValueMapStack()
+	cpy.bindings = unify.New()
 	return cpy
 }
 
@@ -381,11 +397,15 @@ func (t *Topdown) flushRedos(evt *Event) {
 }
 
 func (t *Topdown) makeEvent(op Op, node interface{}) *Event {
+	locals := ast.NewValueMap()
+	for _, pair := range t.bindings.Bindings() {
+		locals.Put(pair[0].Value, pair[1].Value)
+	}
 	evt := Event{
 		Op:      op,
 		Node:    node,
 		QueryID: t.qid,
-		Locals:  t.locals.Copy(),
+		Locals:  locals,
 	}
 	if t.Previous != nil {
 		evt.ParentID = t.Previous.qid
@@ -937,363 +957,8 @@ func evalExpr(t *Topdown, iter Iterator) error {
 // all variables found in the reference and (2) the reference itself if that
 // reference refers to a virtual document (ditto for nested references).
 func evalRef(t *Topdown, ref, path ast.Ref, iter Iterator) error {
-
-	// If ref is already bound then invoke iterator immediately. No further
-	// evaluation has to be done.
-	if len(path) == 0 && t.Binding(ref) != nil {
-		return iter(t)
-	}
-
-	if len(ref) == 0 {
-
-		if path.HasPrefix(ast.DefaultRootRef) {
-			return evalRefRec(t, path, iter)
-		}
-
-		if path.HasPrefix(ast.InputRootRef) {
-			// If no input was supplied, then any references to the input
-			// are undefined.
-			if t.Input == nil {
-				return nil
-			}
-			return evalRefRuleResult(t, path, path[1:], t.Input, iter)
-		}
-
-		if v := t.Binding(path[0].Value); v != nil {
-			return evalRefRuleResult(t, path, path[1:], v, iter)
-		}
-
-		// This should not be reachable.
-		return fmt.Errorf("unbound ref head")
-	}
-
-	var n ast.Ref
-	head, tail := ref[0], ref[1:]
-	switch h := head.Value.(type) {
-	case ast.Ref:
-		n = h
-	case ast.Array, ast.Object, *ast.Set:
-		return evalTermsRec(t, func(t *Topdown) error {
-			path = append(path, head)
-			return evalRef(t, tail, path, iter)
-		}, []*ast.Term{ast.NewTerm(h)})
-	default:
-		path = append(path, head)
-		return evalRef(t, tail, path, iter)
-	}
-
-	return evalRef(t, n, ast.Ref{}, func(t *Topdown) error {
-
-		var undo *Undo
-
-		// Add a binding for the nested reference 'n' if one does not exist. If
-		// 'n' referred to a virtual document the binding would already exist.
-		// We bind nested references so that when the overall expression is
-		// evaluated, it will not contain any nested references.
-		if b := t.Binding(n); b == nil {
-			var err error
-			var v ast.Value
-			switch p := PlugValue(n, t.Binding).(type) {
-			case ast.Ref:
-				v, err = lookupValue(t, p)
-				if err != nil {
-					return err
-				}
-			default:
-				v = p
-			}
-			undo = t.Bind(n, v, nil)
-		}
-
-		tmp := append(path, head)
-		err := evalRef(t, tail, tmp, iter)
-
-		if undo != nil {
-			t.Unbind(undo)
-		}
-
-		return err
-	})
+	return evalDot(t, ref, iter)
 }
-
-func evalRefRec(t *Topdown, ref ast.Ref, iter Iterator) error {
-
-	// Obtain ground prefix of the reference.
-	var prefix ast.Ref
-
-	switch v := PlugValue(ref, t.Binding).(type) {
-	case ast.Ref:
-		// https://github.com/open-policy-agent/opa/issues/238
-		// We must set ref to the plugged value here otherwise the ref
-		// evaluation doesn't have consistent values for prefix and ref.
-		ref = v
-		prefix = v.GroundPrefix()
-	default:
-		// Fast-path? TODO test case.
-		return iter(t)
-	}
-
-	// Check if ref refers to virtual doc by walking down the rule tree.
-	node := t.Compiler.RuleTree
-	for i := 0; i < len(prefix); i++ {
-		child := node.Child(prefix[i].Value)
-		if child == nil {
-			break
-		}
-		if len(child.Values) > 0 {
-			return evalRefRule(t, ref, prefix[:i+1], iter)
-		}
-		node = child
-	}
-
-	if len(prefix) == len(ref) {
-		return evalRefRecGround(t, ref, prefix, iter)
-	}
-
-	return evalRefRecNonGround(t, ref, prefix, iter)
-}
-
-// evalRefRecGround evaluates the ground reference prefix. The reference is
-// processed to decide whether evaluation should continue. If the reference
-// refers to one or more virtual documents, then all of the referenced documents
-// (i.e., base and virtual documents) are merged and the ref is bound to the
-// result before continuing.
-func evalRefRecGround(t *Topdown, ref, prefix ast.Ref, iter Iterator) error {
-
-	doc, readErr := t.Resolve(prefix)
-	if readErr != nil {
-		if !storage.IsNotFound(readErr) {
-			return readErr
-		}
-	}
-
-	node := t.Compiler.RuleTree
-	for _, x := range prefix {
-		node = node.Children[x.Value]
-		if node == nil {
-			// If node is nil, prefix refers to non-existent node. Evaluation
-			// continues iff the reference is defined for some base document.
-			if storage.IsNotFound(readErr) {
-				return nil
-			}
-			return iter(t)
-		}
-	}
-
-	vdoc, err := evalRefRecTree(t, prefix, node)
-	if err != nil {
-		return err
-	}
-
-	if vdoc == nil {
-		if storage.IsNotFound(readErr) {
-			return nil
-		}
-		return iter(t)
-	}
-
-	// The reference is defined for one or more virtual documents. Now merge the
-	// virtual and base documents together (if they exist) and continue.
-	result := vdoc
-	if readErr == nil {
-
-		v, err := ast.InterfaceToValue(doc)
-		if err != nil {
-			return err
-		}
-
-		// It should not be possible for the cast or merge to fail. The cast
-		// cannot fail because by definition, the document must be an object, as
-		// there are rules that have been evaluated and rules cannot be defined
-		// inside arrays. The merge cannot fail either, because that would
-		// indicate a conflict between a base document and a virtual document.
-		//
-		// TODO(tsandall): confirm that we have guards to prevent base and
-		// virtual documents from conflicting with each other.
-		result, _ = v.(ast.Object).Merge(result)
-	}
-
-	return Continue(t, ref, result, iter)
-}
-
-// evalRefRecTree evaluates the rules found in the leaves of the tree. For each
-// non-leaf node in the tree, the results are merged together to form an
-// object. The final result is the object representing the virtual document
-// rooted at node.
-func evalRefRecTree(t *Topdown, path ast.Ref, node *ast.TreeNode) (ast.Object, error) {
-	v := ast.Object{}
-
-	for _, c := range node.Children {
-		if c.Hide {
-			continue
-		}
-		path = append(path, &ast.Term{Value: c.Key})
-		if len(c.Values) > 0 {
-			var result ast.Value
-			err := evalRefRule(t, path, path, func(t *Topdown) error {
-				result = t.Binding(path)
-				return nil
-			})
-			if err != nil {
-				return nil, err
-			}
-			if result != nil {
-				key := path[len(path)-1]
-				val := &ast.Term{Value: result}
-				obj := ast.Object{ast.Item(key, val)}
-				v, _ = v.Merge(obj)
-			}
-		} else {
-			result, err := evalRefRecTree(t, path, c)
-			if err != nil {
-				return nil, err
-			}
-			key := &ast.Term{Value: c.Key}
-			val := &ast.Term{Value: result}
-			obj := ast.Object{ast.Item(key, val)}
-			v, _ = v.Merge(obj)
-		}
-		path = path[:len(path)-1]
-	}
-
-	return v, nil
-}
-
-// evalRefRecNonGround processes the non-ground reference ref. The reference
-// is processed by enumerating values that may be used as keys for the next
-// (variable) term in the reference and then recursing on the reference.
-func evalRefRecNonGround(t *Topdown, ref, prefix ast.Ref, iter Iterator) error {
-
-	// Keep track of keys visited. The reference may refer to both virtual and
-	// base documents or virtual documents produced by disjunctive rules. In
-	// either case, we only want to visit each unique key once.
-	visited := map[ast.Value]struct{}{}
-
-	variable := ref[len(prefix)].Value
-
-	doc, err := t.Resolve(prefix)
-	if err != nil {
-		if !storage.IsNotFound(err) {
-			return err
-		}
-	}
-
-	if err == nil {
-		switch doc := doc.(type) {
-		case map[string]interface{}:
-			for k := range doc {
-				key := ast.String(k)
-				if _, ok := visited[key]; ok {
-					continue
-				}
-				undo := t.Bind(variable, key, nil)
-				err := evalRefRec(t, ref, iter)
-				t.Unbind(undo)
-				if err != nil {
-					return err
-				}
-				visited[key] = struct{}{}
-			}
-		case []interface{}:
-			for idx := range doc {
-				undo := t.Bind(variable, ast.IntNumberTerm(idx).Value, nil)
-				err := evalRefRec(t, ref, iter)
-				t.Unbind(undo)
-				if err != nil {
-					return err
-				}
-			}
-			return nil
-		default:
-			return nil
-		}
-	}
-
-	node := t.Compiler.ModuleTree
-	for _, x := range prefix {
-		node = node.Children[x.Value]
-		if node == nil {
-			return nil
-		}
-	}
-
-	for _, mod := range node.Modules {
-		for _, rule := range mod.Rules {
-			key := ast.String(rule.Head.Name)
-			if _, ok := visited[key]; ok {
-				continue
-			}
-			undo := t.Bind(variable, key, nil)
-			err := evalRefRec(t, ref, iter)
-			t.Unbind(undo)
-			if err != nil {
-				return err
-			}
-			visited[key] = struct{}{}
-		}
-	}
-
-	for child := range node.Children {
-		key := child.(ast.String)
-		if _, ok := visited[key]; ok {
-			continue
-		}
-		undo := t.Bind(variable, key, nil)
-		err := evalRefRec(t, ref, iter)
-		t.Unbind(undo)
-		if err != nil {
-			return err
-		}
-		visited[key] = struct{}{}
-	}
-
-	return nil
-}
-
-func evalRefRule(t *Topdown, ref ast.Ref, path ast.Ref, iter Iterator) error {
-
-	// Invariant: evalRefRule is called with path equal to existing rule path.
-	// Index must exist.
-	index := t.Compiler.RuleIndex(path)
-
-	ir, err := index.Lookup(valueResolver{t})
-	if err != nil {
-		return err
-	}
-
-	suffix := ref[len(path):]
-
-	switch ir.Kind {
-
-	case ast.CompleteDoc:
-		return evalRefRuleCompleteDoc(t, ref, suffix, ir, iter)
-
-	case ast.PartialObjectDoc:
-		if len(suffix) == 0 {
-			return evalRefRulePartialObjectDocFull(t, ref, ir.Rules, iter)
-		}
-		for i, rule := range ir.Rules {
-			err := evalRefRulePartialObjectDoc(t, ref, path, rule, i > 0, iter)
-			if err != nil {
-				return err
-			}
-		}
-
-	case ast.PartialSetDoc:
-		if len(suffix) == 0 {
-			return evalRefRulePartialSetDocFull(t, ref, ir.Rules, iter)
-		}
-		for i, rule := range ir.Rules {
-			err := evalRefRulePartialSetDoc(t, ref, path, rule, i > 0, iter)
-			if err != nil {
-				return err
-			}
-		}
-	}
-
-	return nil
-}
-
 func evalRefRuleApply(t *Topdown, path ast.Ref, args []*ast.Term, iter Iterator) error {
 
 	index := t.Compiler.RuleIndex(path)
@@ -1378,556 +1043,6 @@ func evalRefRuleApplyOne(t *Topdown, rule *ast.Rule, args ast.Array, redo bool, 
 	}
 	child.Unbind(undo)
 	return result, nil
-}
-
-func evalRefRuleCompleteDoc(t *Topdown, ref ast.Ref, suffix ast.Ref, ir *ast.IndexResult, iter Iterator) error {
-
-	if ir.Empty() {
-		return nil
-	}
-
-	if len(ir.Rules) > 0 && len(ir.Rules[0].Head.Args) > 0 {
-		// Skip functions. Functions are not evaluated if args are unavailable.
-		// Functions are evaluated when the overall expression is evaluated.
-		return nil
-	}
-
-	// Determine cache key for rule set. Since the rule set must generate at
-	// most one value, we can cache the result on any rule.
-	var cacheKey *ast.Rule
-	if len(ir.Rules) > 0 {
-		cacheKey = ir.Rules[0]
-	} else {
-		cacheKey = ir.Default
-	}
-
-	if doc, ok := t.cache.complete[cacheKey]; ok {
-		return evalRefRuleResult(t, ref, suffix, doc, iter)
-	}
-
-	var result ast.Value
-	var redo bool
-
-	for _, rule := range ir.Rules {
-
-		next, err := evalRefRuleCompleteDocSingle(t, rule, redo, result)
-		if err != nil {
-			return err
-		}
-
-		redo = true
-
-		if next != nil {
-			result = next
-		} else {
-			chain := ir.Else[rule]
-			for i := range chain {
-				next, err := evalRefRuleCompleteDocSingle(t, chain[i], redo, result)
-				if err != nil {
-					return err
-				}
-				if next != nil {
-					result = next
-					break
-				}
-			}
-		}
-	}
-
-	if result == nil && ir.Default != nil {
-		var err error
-		result, err = evalRefRuleCompleteDocSingle(t, ir.Default, redo, nil)
-		if err != nil {
-			return err
-		}
-	}
-
-	if result != nil {
-		t.cache.complete[cacheKey] = result
-		return evalRefRuleResult(t, ref, suffix, result, iter)
-	}
-
-	return nil
-}
-
-func evalRefRuleCompleteDocSingle(t *Topdown, rule *ast.Rule, redo bool, last ast.Value) (ast.Value, error) {
-
-	child := t.Child(rule.Body)
-
-	if !redo {
-		child.traceEnter(rule)
-	} else {
-		child.traceRedo(rule)
-	}
-
-	var result ast.Value
-
-	err := eval(child, func(child *Topdown) error {
-
-		result = PlugValue(rule.Head.Value.Value, child.Binding)
-
-		// If document is already defined, check for conflict.
-		if last != nil {
-			if last.Compare(result) != 0 {
-				return completeDocConflictErr(t.currentLocation(rule))
-			}
-		} else {
-			last = result
-		}
-
-		child.traceExit(rule)
-		child.traceRedo(rule)
-		return nil
-	})
-
-	return result, err
-}
-
-func evalRefRulePartialObjectDoc(t *Topdown, ref ast.Ref, path ast.Ref, rule *ast.Rule, redo bool, iter Iterator) error {
-	suffix := ref[len(path):]
-
-	key := PlugValue(suffix[0].Value, t.Binding)
-
-	// There are two cases being handled below. The first deals with non-ground
-	// keys. If the key is not ground, we evaluate the child query and copy the
-	// key binding from the child into t. The second deals with ground keys. In
-	// that case, we initialize the child with a key binding and evaluate the
-	// child query. This reduces the amount of processing the child query has to
-	// do.
-	//
-	// In the first case, we do not unify the keys because the unification does
-	// not namespace variables within their context. As a result, we could end
-	// up with a recursive binding if we unified "key" with "rule.Head.Key.Value". If
-	// unification is improved to handle namespacing, this can be revisited.
-	if !key.IsGround() {
-		child := t.Child(rule.Body)
-		if redo {
-			child.traceRedo(rule)
-		} else {
-			child.traceEnter(rule)
-		}
-		return eval(child, func(child *Topdown) error {
-
-			key := PlugValue(rule.Head.Key.Value, child.Binding)
-
-			if r, ok := key.(ast.Ref); ok {
-				var err error
-				key, err = lookupValue(t, r)
-				if err != nil {
-					if storage.IsNotFound(err) {
-						return nil
-					}
-					return err
-				}
-			}
-
-			if !ast.IsScalar(key) {
-				return objectDocKeyTypeErr(t.currentLocation(rule))
-			}
-
-			value := PlugValue(rule.Head.Value.Value, child.Binding)
-			if !value.IsGround() {
-				return fmt.Errorf("unbound variable: %v", value)
-			}
-
-			child.traceExit(rule)
-
-			undo := t.Bind(suffix[0].Value.(ast.Var), key, nil)
-			err := evalRefRuleResult(t, ref, ref[len(path)+1:], value, iter)
-			t.Unbind(undo)
-			child.traceRedo(rule)
-			return err
-		})
-	}
-
-	// Check if the rule has already been evaluated with this key. If it has,
-	// proceed with the cached value. Otherwise, evaluate the rule and update
-	// the cache.
-	if docs, ok := t.cache.partialobjs[rule]; ok {
-		if r, ok := key.(ast.Ref); ok {
-			var err error
-			key, err = lookupValue(t, r)
-			if err != nil {
-				if storage.IsNotFound(err) {
-					return nil
-				}
-				return err
-			}
-		}
-		if !ast.IsScalar(key) {
-			return objectDocKeyTypeErr(t.currentLocation(rule))
-		}
-		if doc, ok := docs[key]; ok {
-			return evalRefRuleResult(t, ref, ref[len(path)+1:], doc, iter)
-		}
-	}
-
-	child := t.Child(rule.Body)
-
-	_, err := evalEqUnify(child, key, rule.Head.Key.Value, nil, func(child *Topdown) error {
-
-		if redo {
-			child.traceRedo(rule)
-		} else {
-			child.traceEnter(rule)
-		}
-
-		return eval(child, func(child *Topdown) error {
-
-			value := PlugValue(rule.Head.Value.Value, child.Binding)
-			if !value.IsGround() {
-				return fmt.Errorf("unbound variable: %v", value)
-			}
-
-			cache, ok := t.cache.partialobjs[rule]
-			if !ok {
-				cache = map[ast.Value]ast.Value{}
-				t.cache.partialobjs[rule] = cache
-			}
-
-			if r, ok := key.(ast.Ref); ok {
-				var err error
-				key, err = lookupValue(t, r)
-				if err != nil {
-					if storage.IsNotFound(err) {
-						return nil
-					}
-					return err
-				}
-			}
-
-			if !ast.IsScalar(key) {
-				return objectDocKeyTypeErr(t.currentLocation(rule))
-			}
-
-			cache[key] = value
-
-			child.traceExit(rule)
-
-			err := evalRefRuleResult(t, ref, ref[len(path)+1:], value.(ast.Value), iter)
-			if err != nil {
-				return err
-			}
-
-			child.traceRedo(rule)
-			return nil
-		})
-	})
-
-	return err
-
-}
-
-func evalRefRulePartialObjectDocFull(t *Topdown, ref ast.Ref, rules []*ast.Rule, iter Iterator) error {
-
-	var result ast.Object
-	keys := ast.NewValueMap()
-
-	for i, rule := range rules {
-
-		child := t.Child(rule.Body)
-
-		if i == 0 {
-			child.traceEnter(rule)
-		} else {
-			child.traceRedo(rule)
-		}
-
-		err := eval(child, func(child *Topdown) error {
-
-			key := PlugValue(rule.Head.Key.Value, child.Binding)
-
-			if r, ok := key.(ast.Ref); ok {
-				var err error
-				key, err = lookupValue(t, r)
-				if err != nil {
-					if storage.IsNotFound(err) {
-						return nil
-					}
-					return err
-				}
-			}
-
-			if !ast.IsScalar(key) {
-				return objectDocKeyTypeErr(t.currentLocation(rule))
-			}
-
-			value := PlugValue(rule.Head.Value.Value, child.Binding)
-
-			if !value.IsGround() {
-				return fmt.Errorf("unbound variable: %v", value)
-			}
-
-			if exist := keys.Get(key); exist != nil && exist.Compare(value) != 0 {
-				return objectDocKeyConflictErr(t.currentLocation(rule))
-			}
-
-			keys.Put(key, value)
-
-			result = append(result, ast.Item(&ast.Term{Value: key}, &ast.Term{Value: value}))
-			child.traceExit(rule)
-			child.traceRedo(rule)
-			return nil
-		})
-
-		if err != nil {
-			return err
-		}
-	}
-
-	return Continue(t, ref, result, iter)
-}
-
-func evalRefRulePartialSetDoc(t *Topdown, ref ast.Ref, path ast.Ref, rule *ast.Rule, redo bool, iter Iterator) error {
-
-	suffix := ref[len(path):]
-	key := PlugValue(suffix[0].Value, t.Binding)
-
-	// See comment in evalRefRulePartialObjectDoc about the two branches below.
-	if !key.IsGround() {
-
-		child := t.Child(rule.Body)
-
-		if redo {
-			child.traceRedo(rule)
-		} else {
-			child.traceEnter(rule)
-		}
-
-		// TODO(tsandall): Currently this evaluates the child query without any
-		// bindings from t. In cases where the key is partially ground this may
-		// be quite inefficient. An optimization would be to unify variables in
-		// the child query with ground values in the current context/query. To
-		// do this, the unification may need to be improved to namespace
-		// variables across contexts (otherwise we could end up with recursive
-		// bindings).
-		return eval(child, func(child *Topdown) error {
-			value := PlugValue(rule.Head.Key.Value, child.Binding)
-			if !value.IsGround() {
-				return fmt.Errorf("unbound variable: %v", rule.Head.Value)
-			}
-			child.traceExit(rule)
-			undo, err := evalEqUnify(t, key, value, nil, func(t *Topdown) error {
-				return evalRefRuleResult(t, ref, ref[len(path)+1:], PlugValue(key, t.Binding), iter)
-			})
-
-			if err != nil {
-				return err
-			}
-			t.Unbind(undo)
-			child.traceRedo(rule)
-			return nil
-		})
-	}
-
-	child := t.Child(rule.Body)
-
-	_, err := evalEqUnify(child, key, rule.Head.Key.Value, nil, func(child *Topdown) error {
-		if redo {
-			child.traceRedo(rule)
-		} else {
-			child.traceEnter(rule)
-		}
-		return eval(child, func(child *Topdown) error {
-			child.traceExit(rule)
-			err := evalRefRuleResult(t, ref, ref[len(path)+1:], key, iter)
-			if err != nil {
-				return err
-			}
-			child.traceRedo(rule)
-			return nil
-		})
-	})
-
-	return err
-}
-
-func evalRefRulePartialSetDocFull(t *Topdown, ref ast.Ref, rules []*ast.Rule, iter Iterator) error {
-
-	result := &ast.Set{}
-
-	for i, rule := range rules {
-
-		child := t.Child(rule.Body)
-
-		if i == 0 {
-			child.traceEnter(rule)
-		} else {
-			child.traceRedo(rule)
-		}
-
-		err := eval(child, func(child *Topdown) error {
-			value := PlugValue(rule.Head.Key.Value, child.Binding)
-			result.Add(&ast.Term{Value: value})
-			child.traceExit(rule)
-			child.traceRedo(rule)
-			return nil
-		})
-
-		if err != nil {
-			return err
-		}
-	}
-
-	return Continue(t, ref, result, iter)
-}
-
-func evalRefRuleResult(t *Topdown, ref ast.Ref, suffix ast.Ref, result ast.Value, iter Iterator) error {
-
-	s := make(ast.Ref, len(suffix))
-
-	for i := range suffix {
-		s[i] = PlugTerm(suffix[i], t.Binding)
-	}
-
-	return evalRefRuleResultRec(t, result, s, ast.Ref{}, func(t *Topdown, v ast.Value) error {
-
-		// Check if we already have binding for ref. This can happen when
-		// evaluating self-joins.
-		plugged := make(ast.Ref, len(ref))
-
-		for i := range plugged {
-			plugged[i] = PlugTerm(ref[i], t.Binding)
-		}
-
-		if t.Binding(plugged) != nil {
-			return iter(t)
-		}
-
-		// Must add binding with plugged value of ref in case ref contains
-		// suffix with one or more vars. Test "input: object dereference
-		// ground 2" exercises this.
-		return Continue(t, PlugValue(ref, t.Binding), v, iter)
-	})
-}
-
-func evalRefRuleResultRec(t *Topdown, v ast.Value, ref, path ast.Ref, iter func(*Topdown, ast.Value) error) error {
-
-	if len(ref) == 0 {
-		return iter(t, v)
-	}
-
-	switch v := v.(type) {
-	case ast.Array:
-		return evalRefRuleResultRecArray(t, v, ref, path, iter)
-	case ast.Object:
-		return evalRefRuleResultRecObject(t, v, ref, path, iter)
-	case *ast.Set:
-		return evalRefRuleResultRecSet(t, v, ref, path, iter)
-	case ast.Ref:
-		return evalRefRuleResultRecRef(t, v, ref, path, iter)
-	}
-
-	return nil
-}
-
-func evalRefRuleResultRecArray(t *Topdown, arr ast.Array, ref, path ast.Ref, iter func(*Topdown, ast.Value) error) error {
-	head, tail := ref[0], ref[1:]
-
-	if _, ok := head.Value.(ast.Ref); ok {
-		var err error
-		if head, err = ResolveRefsTerm(head, t); err != nil {
-			return err
-		}
-	}
-
-	switch n := head.Value.(type) {
-	case ast.Number:
-		idx, ok := n.Int()
-		if !ok || idx < 0 {
-			return nil
-		}
-		if idx >= len(arr) {
-			return nil
-		}
-		el := arr[idx]
-		path = append(path, head)
-		return evalRefRuleResultRec(t, el.Value, tail, path, iter)
-	case ast.Var:
-		for i := range arr {
-			idx := ast.IntNumberTerm(i)
-			undo := t.Bind(n, idx.Value, nil)
-			path = append(path, idx)
-			if err := evalRefRuleResultRec(t, arr[i].Value, tail, path, iter); err != nil {
-				return err
-			}
-			t.Unbind(undo)
-			path = path[:len(path)-1]
-		}
-	}
-	return nil
-}
-
-func evalRefRuleResultRecObject(t *Topdown, obj ast.Object, ref, path ast.Ref, iter func(*Topdown, ast.Value) error) error {
-	head, tail := ref[0], ref[1:]
-
-	if _, ok := head.Value.(ast.Ref); ok {
-		var err error
-		if head, err = ResolveRefsTerm(head, t); err != nil {
-			return err
-		}
-	}
-
-	switch k := head.Value.(type) {
-	case ast.String:
-		match := -1
-		for idx, i := range obj {
-			x := i[0].Value
-			if r, ok := i[0].Value.(ast.Ref); ok {
-				var err error
-				if x, err = lookupValue(t, r); err != nil {
-					if storage.IsNotFound(err) {
-						return nil
-					}
-					return err
-				}
-			}
-			if x.Compare(k) == 0 {
-				match = idx
-				break
-			}
-		}
-		if match == -1 {
-			return nil
-		}
-		path = append(path, head)
-		return evalRefRuleResultRec(t, obj[match][1].Value, tail, path, iter)
-	case ast.Var:
-		for _, i := range obj {
-			undo := t.Bind(k, i[0].Value, nil)
-			path = append(path, i[0])
-			if err := evalRefRuleResultRec(t, i[1].Value, tail, path, iter); err != nil {
-				return err
-			}
-			t.Unbind(undo)
-			path = path[:len(path)-1]
-		}
-	}
-	return nil
-}
-
-func evalRefRuleResultRecRef(t *Topdown, v, ref, path ast.Ref, iter func(*Topdown, ast.Value) error) error {
-
-	b := append(v, ref...)
-
-	return evalRefRec(t, b, func(t *Topdown) error {
-		return iter(t, PlugValue(b, t.Binding))
-	})
-}
-
-func evalRefRuleResultRecSet(t *Topdown, set *ast.Set, ref, path ast.Ref, iter func(*Topdown, ast.Value) error) error {
-	head, tail := ref[0], ref[1:]
-	for _, e := range *set {
-		undo, err := evalEqUnify(t, e.Value, head.Value, nil, func(t *Topdown) error {
-			return evalRefRuleResultRec(t, e.Value, tail, path.Append(e), iter)
-		})
-
-		if err != nil {
-			return err
-		}
-		t.Unbind(undo)
-	}
-	return nil
 }
 
 func evalTerms(t *Topdown, iter Iterator) error {
@@ -2340,7 +1455,7 @@ func (s *valueMapStack) Bind(k, v ast.Value, prev *Undo) *Undo {
 	vm := s.Peek()
 	orig := vm.Get(k)
 	vm.Put(k, v)
-	return &Undo{k, orig, prev}
+	return &Undo{k, orig, prev, nil}
 }
 
 func (s *valueMapStack) Unbind(u *Undo) {

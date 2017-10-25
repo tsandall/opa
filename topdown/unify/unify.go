@@ -59,6 +59,17 @@ func New() *Unifier {
 	return &Unifier{values}
 }
 
+func (u *Unifier) Bindings() [][2]*ast.Term {
+	result := make([][2]*ast.Term, 0, u.values.Len())
+	u.values.Iter(func(k, _ util.T) bool {
+		term := k.(*ast.Term)
+		value := u.Plug(term)
+		result = append(result, [2]*ast.Term{term, value})
+		return false
+	})
+	return result
+}
+
 // Plug substitutes variables in a with bindings in u.
 func (u *Unifier) Plug(a *ast.Term) *ast.Term {
 	switch v := a.Value.(type) {
@@ -92,20 +103,6 @@ func (u *Unifier) Plug(a *ast.Term) *ast.Term {
 		return &cpy
 	}
 	return a
-}
-
-// Bindings returns a set of bindings for vars in the unifier.
-func (u *Unifier) Bindings() [][2]*ast.Term {
-	if u == nil {
-		return nil
-	}
-	result := make([][2]*ast.Term, 0, u.values.Len())
-	u.values.Iter(func(k, _ util.T) bool {
-		kt := k.(*ast.Term)
-		result = append(result, [2]*ast.Term{kt, u.Plug(kt)})
-		return false
-	})
-	return result
 }
 
 func (u *Unifier) String() string {

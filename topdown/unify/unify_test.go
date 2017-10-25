@@ -122,26 +122,6 @@ func TestUnifySame(t *testing.T) {
 		t.Fatalf("Expected %v but got %v", exp, result)
 	}
 	UndoAll(undo)
-	if len(a.Bindings()) != 0 {
-		t.Fatal("Expected bindings to be empty:", a)
-	}
-}
-
-func TestUnifierBindings(t *testing.T) {
-	u1 := New()
-	Unify(term("a"), u1, term("1"), u1)
-	Unify(term("b"), u1, term("a"), u1)
-	Unify(term("c"), u1, term("b"), u1)
-	bindings := u1.Bindings()
-	keys := term("{a, b, c}").Value.(*ast.Set)
-	if len(bindings) != 3 {
-		t.Fatal("Unexpected bindings:", bindings)
-	}
-	for i := range bindings {
-		if !keys.Contains(bindings[i][0]) || !bindings[i][1].Equal(term("1")) {
-			t.Fatal("Unexpected binding value:", bindings)
-		}
-	}
 }
 
 func TestUnifierZeroValues(t *testing.T) {
@@ -152,12 +132,6 @@ func TestUnifierZeroValues(t *testing.T) {
 	exp := term("x")
 	if !result.Equal(exp) {
 		t.Fatalf("Expected %v but got %v", exp, result)
-	}
-
-	// Bindings
-	result2 := unifier.Bindings()
-	if len(result2) != 0 {
-		t.Fatalf("Expected empty bindings but got: %v", result)
 	}
 
 	// String
