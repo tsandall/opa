@@ -63,7 +63,7 @@ func (e evalDotTree) eval() error {
 			}
 			return err
 		} else if result != nil {
-			return Continue(e.t, e.ref, result, e.iter)
+			return Continue(e.t, e.ref, result, e.t.bindings, e.iter)
 		}
 		return e.iter(e.t)
 	}
@@ -107,7 +107,7 @@ func (e evalDotTree) next(op *ast.Term) error {
 
 func (e evalDotTree) enumerate() error {
 
-	prefix := unifierPlugRef(e.t.bindings, e.ref[:e.pos])
+	prefix := unifierPlugRef(e.t, e.ref[:e.pos])
 
 	doc, err := e.t.Resolve(prefix)
 	if err != nil {
@@ -160,7 +160,7 @@ func (e evalDotTree) enumerate() error {
 
 func (e evalDotTree) evalExtent() (ast.Value, error) {
 
-	plugged := unifierPlugRef(e.t.bindings, e.ref)
+	plugged := unifierPlugRef(e.t, e.ref)
 
 	base, readErr := e.t.Resolve(plugged)
 	if readErr != nil {
@@ -173,7 +173,7 @@ func (e evalDotTree) evalExtent() (ast.Value, error) {
 
 	if e.parent != nil {
 		var err error
-		virtual, err = e.evalRecursive(unifierPlugRef(e.t.bindings, e.ref), e.parent)
+		virtual, err = e.evalRecursive(unifierPlugRef(e.t, e.ref), e.parent)
 		if err != nil {
 			return nil, err
 		}
@@ -246,7 +246,7 @@ type evalDotRules struct {
 
 func (e evalDotRules) eval() error {
 
-	prefix := unifierPlugRef(e.t.bindings, e.ref[:e.pos+1])
+	prefix := unifierPlugRef(e.t, e.ref[:e.pos+1])
 
 	index := e.t.Compiler.RuleIndex(prefix)
 	ir, err := index.Lookup(valueResolver{e.t})
@@ -289,42 +289,6 @@ func (e evalDotRules) eval() error {
 		}
 		return r.eval()
 	}
-}
-
-func setReduce(t *Topdown, rule *ast.Rule, acc ast.Value) (ast.Value, error) {
-	val := PlugTerm(rule.Head.Key, t.Binding)
-	var set *ast.Set
-	if acc == nil {
-		set = &ast.Set{}
-	} else {
-		set = acc.(*ast.Set)
-	}
-	set.Add(val)
-	return set, nil
-}
-
-func setDeref(rule *ast.Rule) *ast.Term {
-	return rule.Head.Key
-}
-
-func objectReduce(t *Topdown, rule *ast.Rule, acc ast.Value) (ast.Value, error) {
-	key := PlugTerm(rule.Head.Key, t.Binding)
-	val := PlugTerm(rule.Head.Value, t.Binding)
-	var obj ast.Object
-	if acc == nil {
-		obj = ast.Object{}
-	} else {
-		obj = acc.(ast.Object)
-	}
-	if exist := obj.Get(key); exist != nil && !exist.Equal(val) {
-		return nil, objectDocKeyConflictErr(t.currentLocation(rule))
-	}
-	obj = append(obj, ast.Item(key, val))
-	return obj, nil
-}
-
-func objectDeref(rule *ast.Rule) *ast.Term {
-	return rule.Head.Value
 }
 
 type evalDotCompleteDoc struct {
@@ -432,7 +396,7 @@ func (e evalDotPartialDoc) evalAllRules(rules []*ast.Rule) error {
 			return err
 		}
 	}
-	return Continue(e.t, e.ref, result, e.iter)
+	return Continue(e.t, e.ref, result, e.t.bindings, e.iter)
 }
 
 func (e evalDotPartialDoc) evalOneRule(rule *ast.Rule) error {
@@ -469,7 +433,7 @@ func (e evalDotTerm) eval() error {
 
 	if e.pos == len(e.ref) {
 		if e.bind {
-			return Continue(e.t, e.ref, e.term.Value, e.iter)
+			return Continue(e.t, e.ref, e.term.Value, e.other, e.iter)
 		}
 		return e.iter(e.t)
 	}
@@ -546,11 +510,47 @@ func (e evalDotTerm) next(child *ast.Term) error {
 	return cpy.eval()
 }
 
-func unifierPlugRef(u *unify.Unifier, ref ast.Ref) ast.Ref {
+func unifierPlugRef(t *Topdown, ref ast.Ref) ast.Ref {
 	cpy := make(ast.Ref, len(ref))
 	cpy[0] = ref[0]
 	for i := 1; i < len(ref); i++ {
-		cpy[i] = u.Plug(ref[i])
+		cpy[i] = PlugTerm(ref[i], t.Binding)
 	}
 	return cpy
+}
+
+func setReduce(t *Topdown, rule *ast.Rule, acc ast.Value) (ast.Value, error) {
+	val := PlugTerm(rule.Head.Key, t.Binding)
+	var set *ast.Set
+	if acc == nil {
+		set = &ast.Set{}
+	} else {
+		set = acc.(*ast.Set)
+	}
+	set.Add(val)
+	return set, nil
+}
+
+func setDeref(rule *ast.Rule) *ast.Term {
+	return rule.Head.Key
+}
+
+func objectReduce(t *Topdown, rule *ast.Rule, acc ast.Value) (ast.Value, error) {
+	key := PlugTerm(rule.Head.Key, t.Binding)
+	val := PlugTerm(rule.Head.Value, t.Binding)
+	var obj ast.Object
+	if acc == nil {
+		obj = ast.Object{}
+	} else {
+		obj = acc.(ast.Object)
+	}
+	if exist := obj.Get(key); exist != nil && !exist.Equal(val) {
+		return nil, objectDocKeyConflictErr(t.currentLocation(rule))
+	}
+	obj = append(obj, ast.Item(key, val))
+	return obj, nil
+}
+
+func objectDeref(rule *ast.Rule) *ast.Term {
+	return rule.Head.Value
 }

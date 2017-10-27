@@ -305,7 +305,7 @@ func evalEqSets(t *Topdown, a *ast.Set, b *ast.Set, prev *Undo, iter Iterator) (
 }
 
 func evalEqUnifyVar(t *Topdown, a ast.Var, b ast.Value, prev *Undo, iter Iterator) (*Undo, error) {
-	undo := t.Bind(a, b, prev)
+	undo := t.Bind(a, b, t.bindings, prev)
 	err := iter(t)
 	return undo, err
 }

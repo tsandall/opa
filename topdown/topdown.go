@@ -11,6 +11,7 @@ import (
 	"sync"
 
 	"github.com/open-policy-agent/opa/topdown/unify"
+	"github.com/open-policy-agent/opa/util"
 
 	"github.com/open-policy-agent/opa/ast"
 	"github.com/open-policy-agent/opa/metrics"
@@ -129,7 +130,11 @@ func (t *Topdown) Vars() map[ast.Var]ast.Value {
 func (t *Topdown) Binding(k ast.Value) ast.Value {
 	switch k := k.(type) {
 	case ast.Ref:
-		return t.refs.Binding(k)
+		x, u := t.refs.Binding(k)
+		if x == nil {
+			return nil
+		}
+		return u.Plug(ast.NewTerm(x)).Value
 	case *ast.SetComprehension, *ast.ArrayComprehension, *ast.ObjectComprehension:
 		return t.locals.Get(k)
 	default:
@@ -145,17 +150,20 @@ func (t *Topdown) Binding(k ast.Value) ast.Value {
 // Undo represents a binding that can be undone.
 type Undo struct {
 	Key     ast.Value
-	Value   ast.Value
+	Value   interface{}
 	Prev    *Undo
 	wrapped unify.Undo
 }
 
 // Bind updates t to include a binding from the key to the value. The return
 // value is used to return t to the state before the binding was added.
-func (t *Topdown) Bind(key ast.Value, value ast.Value, prev *Undo) *Undo {
+func (t *Topdown) Bind(key ast.Value, value ast.Value, u *unify.Unifier, prev *Undo) *Undo {
 	switch key := key.(type) {
 	case ast.Ref:
-		return t.refs.Bind(key, value, prev)
+		if u == nil {
+			panic("illegal value")
+		}
+		return t.refs.Bind(key, value, u, prev)
 	case *ast.SetComprehension, *ast.ArrayComprehension, *ast.ObjectComprehension:
 		if t.locals == nil {
 			t.locals = ast.NewValueMap()
@@ -440,11 +448,8 @@ func (c *contextcache) Invalidate() {
 // Iterator is the interface for processing evaluation results.
 type Iterator func(*Topdown) error
 
-// Continue binds key to value in t and calls the iterator. This is a helper
-// function for simple cases where a single value (e.g., a variable) needs to be
-// bound to a value in order for the evaluation the proceed.
-func Continue(t *Topdown, key, value ast.Value, iter Iterator) error {
-	undo := t.Bind(key, value, nil)
+func Continue(t *Topdown, key, value ast.Value, u *unify.Unifier, iter Iterator) error {
+	undo := t.Bind(key, value, u, nil)
 	err := iter(t)
 	t.Unbind(undo)
 	return err
@@ -665,6 +670,8 @@ func Query(params *QueryParams) (QueryResultSet, error) {
 			}
 			bindings[v.String()] = binding
 		}
+
+		fmt.Println("t.locals:", t.locals, "t.refs:", t.refs, "bindings:", t.bindings, fmt.Sprintf("%p", t.bindings))
 
 		// Gather binding for result var.
 		val, err := ast.ValueToInterface(PlugValue(resultVar, t.Binding), t)
@@ -896,7 +903,7 @@ func evalWith(t *Topdown, iter Iterator) error {
 	// the document caches must be invalidated before continuing.
 	//
 	// TODO(tsandall): analyze queries and invalidate only affected caches.
-	cpy.refs.Push(ast.NewValueMap())
+	cpy.refs.Push(newValueMap())
 
 	err = evalStep(cpy, func(next *Topdown) error {
 		next.refs.Pop()
@@ -1113,7 +1120,7 @@ func evalTermsComprehension(t *Topdown, comp ast.Value, iter Iterator) error {
 			return err
 		}
 
-		return Continue(t, comp, result, iter)
+		return Continue(t, comp, result, nil, iter)
 	case *ast.SetComprehension:
 		result := ast.Set{}
 		child := t.Closure(comp.Body)
@@ -1127,7 +1134,7 @@ func evalTermsComprehension(t *Topdown, comp ast.Value, iter Iterator) error {
 			return err
 		}
 
-		return Continue(t, comp, &result, iter)
+		return Continue(t, comp, &result, nil, iter)
 	case *ast.ObjectComprehension:
 		result := ast.Object{}
 		child := t.Closure(comp.Body)
@@ -1149,7 +1156,7 @@ func evalTermsComprehension(t *Topdown, comp ast.Value, iter Iterator) error {
 			return err
 		}
 
-		return Continue(t, comp, result, iter)
+		return Continue(t, comp, result, nil, iter)
 	default:
 		panic(fmt.Sprintf("illegal argument: %v %v", t, comp))
 	}
@@ -1177,7 +1184,7 @@ func evalTermsIndexed(t *Topdown, iter Iterator, index storage.Index, nonIndexed
 				if o := t.Binding(k); o != nil && o.Compare(v) != 0 {
 					return true
 				}
-				prev = t.Bind(k, v, prev)
+				prev = t.Bind(k, v, nil, prev)
 				return false
 			})
 
@@ -1408,30 +1415,30 @@ func lookupValue(t *Topdown, ref ast.Ref) (ast.Value, error) {
 		}
 		return r, nil
 	}
-	panic("illegal value")
+	return nil, fmt.Errorf("bad ref in %v: %v bindings: %v refs: %v", t.Current(), ref, t.bindings, t.refs)
 }
 
 // valueMapStack is used to store a stack of bindings.
 type valueMapStack struct {
-	sl []*ast.ValueMap
+	sl []*util.HashMap
 }
 
 func newValueMapStack() *valueMapStack {
 	return &valueMapStack{}
 }
 
-func (s *valueMapStack) Push(vm *ast.ValueMap) {
+func (s *valueMapStack) Push(vm *util.HashMap) {
 	s.sl = append(s.sl, vm)
 }
 
-func (s *valueMapStack) Pop() *ast.ValueMap {
+func (s *valueMapStack) Pop() *util.HashMap {
 	idx := len(s.sl) - 1
 	vm := s.sl[idx]
 	s.sl = s.sl[:idx]
 	return vm
 }
 
-func (s *valueMapStack) Peek() *ast.ValueMap {
+func (s *valueMapStack) Peek() *util.HashMap {
 	idx := len(s.sl) - 1
 	if idx == -1 {
 		return nil
@@ -1439,28 +1446,59 @@ func (s *valueMapStack) Peek() *ast.ValueMap {
 	return s.sl[idx]
 }
 
-func (s *valueMapStack) Binding(k ast.Value) ast.Value {
+func (s *valueMapStack) Binding(k ast.Value) (ast.Value, *unify.Unifier) {
 	for i := len(s.sl) - 1; i >= 0; i-- {
-		if v := s.sl[i].Get(k); v != nil {
-			return v
+		if v, ok := s.sl[i].Get(k); ok {
+			elem := v.(valueMapStackElem)
+			return elem.v, elem.u
 		}
 	}
-	return nil
+	return nil, nil
 }
 
-func (s *valueMapStack) Bind(k, v ast.Value, prev *Undo) *Undo {
+type valueMapStackElem struct {
+	u *unify.Unifier
+	v ast.Value
+}
+
+func (e valueMapStackElem) IsZero() bool {
+	return e.u == nil
+}
+
+func (e valueMapStackElem) String() string {
+	return fmt.Sprintf("<%v e %v>", e.v, e.u)
+}
+func valueMapStackElemEq(a, b util.T) bool {
+	return a.(ast.Ref).Equal(b.(ast.Ref))
+}
+
+func valueMapStackElemHash(x util.T) int {
+	return x.(ast.Ref).Hash()
+}
+
+func newValueMap() *util.HashMap {
+	return util.NewHashMap(valueMapStackElemEq, valueMapStackElemHash)
+}
+
+func (s *valueMapStack) Bind(k, v ast.Value, u *unify.Unifier, prev *Undo) *Undo {
 	if len(s.sl) == 0 {
-		s.Push(ast.NewValueMap())
+		s.Push(newValueMap())
 	}
 	vm := s.Peek()
-	orig := vm.Get(k)
-	vm.Put(k, v)
-	return &Undo{k, orig, prev, nil}
+	orig, ok := vm.Get(k)
+	var elem valueMapStackElem
+	if ok {
+		elem = orig.(valueMapStackElem)
+	}
+	newElem := valueMapStackElem{u, v}
+	vm.Put(k, newElem)
+	return &Undo{k, elem, prev, nil}
 }
 
 func (s *valueMapStack) Unbind(u *Undo) {
 	vm := s.Peek()
-	if u.Value != nil {
+	elem := u.Value.(valueMapStackElem)
+	if !elem.IsZero() {
 		vm.Put(u.Key, u.Value)
 	} else {
 		vm.Delete(u.Key)

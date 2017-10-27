@@ -191,60 +191,60 @@ func TestEvalTerms(t *testing.T) {
 	}
 }
 
-func TestPlugValue(t *testing.T) {
+// func TestPlugValue(t *testing.T) {
 
-	a := ast.Var("a")
-	b := ast.Var("b")
-	c := ast.Var("c")
-	k := ast.Var("k")
-	v := ast.Var("v")
-	cs := ast.MustParseTerm("[c]").Value
-	ks := ast.MustParseTerm(`{k: "world"}`).Value
-	vs := ast.MustParseTerm(`{"hello": v}`).Value
-	hello := ast.String("hello")
-	world := ast.String("world")
+// 	a := ast.Var("a")
+// 	b := ast.Var("b")
+// 	c := ast.Var("c")
+// 	k := ast.Var("k")
+// 	v := ast.Var("v")
+// 	cs := ast.MustParseTerm("[c]").Value
+// 	ks := ast.MustParseTerm(`{k: "world"}`).Value
+// 	vs := ast.MustParseTerm(`{"hello": v}`).Value
+// 	hello := ast.String("hello")
+// 	world := ast.String("world")
 
-	t1 := New(nil, nil, nil, nil, nil)
-	t1.Bind(a, b, nil)
-	t1.Bind(b, cs, nil)
-	t1.Bind(c, ks, nil)
-	t1.Bind(k, hello, nil)
+// 	t1 := New(nil, nil, nil, nil, nil)
+// 	t1.Bind(a, b, nil)
+// 	t1.Bind(b, cs, nil)
+// 	t1.Bind(c, ks, nil)
+// 	t1.Bind(k, hello, nil)
 
-	t2 := New(nil, nil, nil, nil, nil)
-	t2.Bind(a, b, nil)
-	t2.Bind(b, cs, nil)
-	t2.Bind(c, vs, nil)
-	t2.Bind(v, world, nil)
+// 	t2 := New(nil, nil, nil, nil, nil)
+// 	t2.Bind(a, b, nil)
+// 	t2.Bind(b, cs, nil)
+// 	t2.Bind(c, vs, nil)
+// 	t2.Bind(v, world, nil)
 
-	expected := ast.MustParseTerm(`[{"hello": "world"}]`).Value
+// 	expected := ast.MustParseTerm(`[{"hello": "world"}]`).Value
 
-	r1 := PlugValue(a, t1.Binding)
+// 	r1 := PlugValue(a, t1.Binding)
 
-	if expected.Compare(r1) != 0 {
-		t.Errorf("Expected %v but got %v", expected, r1)
-		return
-	}
+// 	if expected.Compare(r1) != 0 {
+// 		t.Errorf("Expected %v but got %v", expected, r1)
+// 		return
+// 	}
 
-	r2 := PlugValue(a, t2.Binding)
+// 	r2 := PlugValue(a, t2.Binding)
 
-	if expected.Compare(r2) != 0 {
-		t.Errorf("Expected %v but got %v", expected, r2)
-	}
+// 	if expected.Compare(r2) != 0 {
+// 		t.Errorf("Expected %v but got %v", expected, r2)
+// 	}
 
-	n := ast.MustParseTerm("a.b[x.y[i]]").Value
+// 	n := ast.MustParseTerm("a.b[x.y[i]]").Value
 
-	t3 := New(nil, nil, nil, nil, nil)
-	t3.Bind(ast.Var("i"), ast.IntNumberTerm(1).Value, nil)
-	t3.Bind(ast.MustParseTerm("x.y[i]").Value, ast.IntNumberTerm(1).Value, nil)
+// 	t3 := New(nil, nil, nil, nil, nil)
+// 	t3.Bind(ast.Var("i"), ast.IntNumberTerm(1).Value, nil)
+// 	t3.Bind(ast.MustParseTerm("x.y[i]").Value, ast.IntNumberTerm(1).Value, nil)
 
-	expected = ast.MustParseTerm("a.b[1]").Value
+// 	expected = ast.MustParseTerm("a.b[1]").Value
 
-	r3 := PlugValue(n, t3.Binding)
+// 	r3 := PlugValue(n, t3.Binding)
 
-	if expected.Compare(r3) != 0 {
-		t.Errorf("Expected %v but got: %v", expected, r3)
-	}
-}
+// 	if expected.Compare(r3) != 0 {
+// 		t.Errorf("Expected %v but got: %v", expected, r3)
+// 	}
+// }
 
 func TestTopDownCompleteDoc(t *testing.T) {
 	tests := []struct {
