@@ -14,6 +14,55 @@ import (
 
 func evalDot(t *Topdown, ref ast.Ref, iter Iterator) error {
 
+	if t.Binding(ref) != nil {
+		return iter(t)
+	}
+
+	return evalDotRec(t, ref, 1, iter)
+}
+
+func evalDotRec(t *Topdown, ref ast.Ref, pos int, iter Iterator) error {
+
+	if len(ref) == pos {
+		ref = unifierPlugRef(t, ref)
+		return evalDotInner(t, ref, iter)
+	}
+
+	switch head := ref[pos].Value.(type) {
+	case ast.Ref:
+		return evalDot(t, head, func(t *Topdown) error {
+			var undo *Undo
+			if b := t.Binding(head); b == nil {
+				var value ast.Value
+				plugged := PlugValue(head, t.Binding)
+				if ref, ok := plugged.(ast.Ref); ok {
+					var err error
+					value, err = lookupValue(t, ref)
+					if err != nil {
+						return err
+					}
+				} else {
+					value = plugged
+				}
+				undo = t.Bind(head, value, t.bindings, nil)
+			}
+			err := evalDotRec(t, ref, pos+1, iter)
+			if undo != nil {
+				t.Unbind(undo)
+			}
+			return err
+		})
+	case ast.Array, *ast.Object, *ast.Set:
+		return evalTermsRec(t, func(t *Topdown) error {
+			return evalDotRec(t, ref, pos+1, iter)
+		}, []*ast.Term{ref[pos]})
+	default:
+		return evalDotRec(t, ref, pos+1, iter)
+	}
+}
+
+func evalDotInner(t *Topdown, ref ast.Ref, iter Iterator) error {
+
 	if ref[0].Equal(ast.DefaultRootDocument) {
 		e := evalDotTree{
 			t:      t,

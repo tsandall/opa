@@ -671,8 +671,6 @@ func Query(params *QueryParams) (QueryResultSet, error) {
 			bindings[v.String()] = binding
 		}
 
-		fmt.Println("t.locals:", t.locals, "t.refs:", t.refs, "bindings:", t.bindings, fmt.Sprintf("%p", t.bindings))
-
 		// Gather binding for result var.
 		val, err := ast.ValueToInterface(PlugValue(resultVar, t.Binding), t)
 		if err != nil {
