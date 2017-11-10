@@ -16,52 +16,99 @@ import (
 	"github.com/open-policy-agent/opa/util/test"
 )
 
-// FIXME(tsandall): wip
-func testPartial(t *testing.T) {
+func TestTopDownPartialEval(t *testing.T) {
 
 	saveInput := []string{`input`}
 
 	tests := []struct {
-		note    string
-		query   string
-		modules []string
-		data    string
-		partial []string
-		input   string
+		note     string
+		query    string
+		modules  []string
+		data     string
+		input    string
+		expected []string
 	}{
 		{
-			note:    "empty",
-			query:   "x = 1",
-			partial: saveInput,
+			note:     "empty",
+			query:    "true = true",
+			expected: []string{``},
 		},
 		{
-			note:    "save",
-			query:   "input.x = 1",
-			partial: saveInput,
+			note:     "query vars",
+			query:    "x = 1",
+			expected: []string{`x = 1`},
 		},
 		{
-			note:    "iterate",
-			query:   "x = [1,2,3]; x[input.x]",
-			partial: saveInput,
+			note:     "trivial",
+			query:    "input.x = 1",
+			expected: []string{`input.x = 1`},
 		},
 		{
-			note:    "namespace",
-			query:   "data.test.p[x]; input.y = x",
-			partial: saveInput,
-			modules: []string{
-				`package test
-
-				p[x] { x = input.x }`,
+			note:     "transitive",
+			query:    "input.x = y; y[0] = z; z = 1",
+			expected: []string{`input.x = y; y[0] = z; z = 1`},
+		},
+		{
+			note:  "iterate data",
+			query: "data.x[i] = input.x",
+			data:  `{"x": [1,2,3]}`,
+			expected: []string{
+				`input.x = 1; i = 0`,
+				`input.x = 2; i = 1`,
+				`input.x = 3; i = 2`,
 			},
 		},
 		{
-			note:    "complete",
-			query:   "data.test.p = input.x",
-			partial: saveInput,
+			note:  "iterate rules: partial object",
+			query: `data.test.p[x] = input.x`,
+			modules: []string{
+				`package test
+
+				p["a"] = "b"
+				p["b"] = "c"
+				p["c"] = "d"`,
+			},
+			expected: []string{
+				`"b" = input.x; x = "a"`,
+				`"c" = input.x; x = "b"`,
+				`"d" = input.x; x = "c"`,
+			},
+		},
+		{
+			note:  "iterate rules: partial set",
+			query: `data.test.p[x]; input.x = x`,
+			modules: []string{
+				`package test
+
+				p[1]
+				p[2]
+				p[3]`,
+			},
+			expected: []string{
+				`input.x = 1; x = 1`,
+				`input.x = 2; x = 2`,
+				`input.x = 3; x = 3`,
+			},
+		},
+		{
+			note:  "namespace",
+			query: "data.test.p[[x,y]]; input.y = x",
+			modules: []string{
+				`package test
+
+				p[[y,x]] { x = 2; y = input.x }`,
+			},
+		},
+		{
+			note:  "complete",
+			query: "data.test.p = input.x",
 			modules: []string{
 				`package test
 
 				p = x { x = "foo" }`,
+			},
+			expected: []string{
+				`"foo" = input.x`,
 			},
 		},
 		{
@@ -72,17 +119,20 @@ func testPartial(t *testing.T) {
 
 				p = x { input.x = x }`,
 			},
-			partial: saveInput,
+			expected: []string{
+				`input.x = x; x = x; x = input.y`,
+			},
 		},
 		{
-			note:    "both",
-			query:   "input.x = input.y",
-			partial: saveInput,
+			note:  "both",
+			query: "input.x = input.y",
+			expected: []string{
+				`input.x = input.y`,
+			},
 		},
 		{
-			note:    "transitive",
-			query:   "input.x = x; x[0] = y; x = z; y = 1; z = 2",
-			partial: saveInput,
+			note:  "transitive",
+			query: "input.x = x; x[0] = y; x = z; y = 1; z = 2",
 		},
 		{
 			note:  "call",
@@ -100,12 +150,6 @@ func testPartial(t *testing.T) {
 					y = 3
 				}`,
 			},
-			partial: saveInput,
-		},
-		{
-			note:    "else",
-			query:   "data.test.p = x",
-			partial: saveInput,
 		},
 	}
 
@@ -121,9 +165,9 @@ func testPartial(t *testing.T) {
 		}
 		prepareTest(ctx, t, params, func(ctx context.Context, t *testing.T, f fixture) {
 
-			partial := make([]*ast.Term, len(tc.partial))
-			for i := range tc.partial {
-				partial[i] = ast.MustParseTerm(tc.partial[i])
+			partial := make([]*ast.Term, len(saveInput))
+			for i := range saveInput {
+				partial[i] = ast.MustParseTerm(saveInput[i])
 			}
 
 			query := NewQuery(f.query).
@@ -134,13 +178,48 @@ func testPartial(t *testing.T) {
 				WithPartial(partial)
 
 			partials, err := query.PartialRun(ctx)
-			t.Logf("err: %v", err)
 
-			for i := range partials {
-				t.Logf("%v", partials[i])
+			if err != nil {
+				t.Fatal(err)
+			}
+
+			expected := make([]ast.Body, len(tc.expected))
+			for i := range tc.expected {
+				expected[i] = ast.MustParseBody(tc.expected[i])
+			}
+
+			a, b := bodySet(partials), bodySet(expected)
+			if !a.Equal(b) {
+				missing := b.Diff(a)
+				extra := a.Diff(b)
+				t.Fatalf("Partial evaluation results differ. Expected %d but got %d:\nMissing: %v\nExtra: %v", len(b), len(a), missing, extra)
 			}
 		})
 	}
+}
+
+type bodySet []ast.Body
+
+func (s bodySet) Contains(b ast.Body) bool {
+	for i := range s {
+		if s[i].Equal(b) {
+			return true
+		}
+	}
+	return false
+}
+
+func (s bodySet) Diff(other bodySet) (r bodySet) {
+	for i := range s {
+		if !other.Contains(s[i]) {
+			r = append(r, s[i])
+		}
+	}
+	return r
+}
+
+func (s bodySet) Equal(other bodySet) bool {
+	return len(s.Diff(other)) == 0 && len(other.Diff(s)) == 0
 }
 
 type fixtureParams struct {
