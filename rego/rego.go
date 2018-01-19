@@ -17,6 +17,21 @@ import (
 	"github.com/open-policy-agent/opa/topdown"
 )
 
+// PartialResult defines the output Rego partial evaluation.
+type PartialResult struct {
+	store    storage.Store
+	compiler *ast.Compiler
+	queries  []ast.Body
+	support  []*ast.Module
+}
+
+// Rego returns a new Rego object that can be evaluated. New Rego objects
+// should be created for each query that needs to be run on the partially
+// evaluated policy.
+func (pr *PartialResult) Rego(options ...func(*Rego)) *Rego {
+	return nil
+}
+
 // Result defines the output of Rego evaluation.
 type Result struct {
 	Expressions []*ExpressionValue `json:"expressions"`
@@ -248,6 +263,10 @@ func (r *Rego) Eval(ctx context.Context) (ResultSet, error) {
 
 	// Evaluate query
 	return r.eval(ctx, compiled, txn)
+}
+
+func (r *Rego) Partial(ctx context.Context) (*PartialResult, error) {
+	return nil, nil
 }
 
 func (r *Rego) parse() (map[string]*ast.Module, ast.Body, error) {

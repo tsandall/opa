@@ -393,3 +393,62 @@ q = {1, 2, 3} { true }`,
 	// row: 3
 	// filename: example_error.rego
 }
+
+func ExampleRego_Partial() {
+
+	ctx := context.Background()
+
+	store := inmem.NewFromReader(bytes.NewBufferString(`{
+		// TODO populate with role and binding example data
+	}`))
+
+	module := `
+		package example
+
+		allow {
+			user_has_role[role_id]
+			role_has_permission[role_id]
+		}
+
+		user_has_role[role_id] {
+			binding = bindings[_]
+			binding.role = role_id
+			binding.group = input.subject.group
+		}
+
+		role_has_permission[role_id] {
+			role = roles[_]
+			role.id = role_id
+		}
+	`
+
+	r := rego.New(
+		rego.Query("data.example.allow = true"),
+		rego.Module("partial.rego", module),
+		rego.Store(store))
+
+	// run partial partial evaluation on regular Rego object to generate a PartialResult object.
+	pr, err := r.Partial(ctx)
+	if err != nil {
+		// Handle error.
+	}
+
+	// construct Rego object from PartialResult each time evaluation has to be performed. PartialResult is cached for performance.
+	r = pr.Rego(
+		rego.Input(map[string]interface{}{
+			"resource": "xxx",
+			"method":   "GET",
+			"group":    "sre",
+		}),
+	)
+
+	// run normal evaluation on Rego object to produce policy decision.
+	_, err = r.Eval(ctx)
+	if err != nil {
+		// Handle error.
+	}
+
+	// TODO: handle query result
+
+	// Output:
+}
