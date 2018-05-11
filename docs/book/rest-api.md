@@ -1365,16 +1365,16 @@ If the `/data/system/main` document is undefined (e.g., because the administrato
 
 ### Execute an Ad-hoc Query
 
-```
+```http
 GET /v1/query
 ```
 
-Execute an ad-hoc query and return bindings for variables found in the query.
+Execute an ad-hoc query and return bindings for variables found in the query and/or conditions that make the query true.
 
 #### Example Request
 
-```
-GET /v1/query?q=data.servers[i].ports[_] = "p2"; data.servers[i].name = name HTTP/1.1
+```http
+GET /v1/query?q=data.servers[i].ports[_]="p2";data.servers[i].name=name HTTP/1.1
 ```
 
 #### Example Response
@@ -1406,6 +1406,8 @@ Content-Type: application/json
 - **explain** - Return query explanation in addition to result. Values: **full**.
 - **metrics** - Return query performance metrics in addition to result. See [Performance Metrics](#performance-metrics) for more detail.
 - **watch** - Set a watch on the query if the parameter is present. See [Watches](#watches) for more detail.
+- **input** - Provide an input document. Format is a JSON value that will be used as the value for the input document.
+- **unknown** - Declare that a value is unknown. Specifying this parameter will cause OPA to return the conditions that make the query true. Specify this parameter multiple times to declare multiple unknowns.
 
 #### Status Codes
 
