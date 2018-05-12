@@ -323,15 +323,16 @@ func (s *Server) execQuery(ctx context.Context, r *http.Request, query string, i
 	}
 
 	var instrument bool
-
 	if includeInstrumentation || diagLogger.Instrument() {
 		instrument = true
 	}
 
 	m := metrics.New()
-
 	compiler := s.getCompiler()
+	unknowns := r.URL.Query()[types.ParamUnknownV1]
+
 	rego := rego.New(
+		rego.Unknowns(unknowns),
 		rego.Store(s.store),
 		rego.Compiler(compiler),
 		rego.Query(query),
@@ -341,14 +342,22 @@ func (s *Server) execQuery(ctx context.Context, r *http.Request, query string, i
 		rego.Tracer(buf),
 	)
 
-	output, err := rego.Eval(ctx)
-	if err != nil {
-		diagLogger.Log(ctx, "", r.RemoteAddr, query, input, nil, err, m, buf)
-		return results, err
-	}
-
-	for _, result := range output {
-		results.Result = append(results.Result, result.Bindings.WithoutWildcards())
+	if len(unknowns) > 0 {
+		output, err := rego.Partial(ctx)
+		if err != nil {
+			diagLogger.Log(ctx, "", r.RemoteAddr, query, input, nil, err, m, buf)
+			return results, err
+		}
+		results.Partial = output.Partials
+	} else {
+		output, err := rego.Eval(ctx)
+		if err != nil {
+			diagLogger.Log(ctx, "", r.RemoteAddr, query, input, nil, err, m, buf)
+			return results, err
+		}
+		for _, result := range output {
+			results.Result = append(results.Result, result.Bindings.WithoutWildcards())
+		}
 	}
 
 	if includeMetrics || includeInstrumentation {
@@ -1120,12 +1129,25 @@ func (s *Server) v1QueryGet(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	inputs := r.URL.Query()[types.ParamInputV1]
+	var input ast.Value
+
+	if len(inputs) > 0 {
+		var err error
+		input, err = readInputGetV1(inputs[len(inputs)-1])
+		if err != nil {
+			writer.ErrorString(w, http.StatusBadRequest, types.CodeInvalidParameter, err)
+			return
+		}
+	}
+
 	pretty := getBoolParam(r.URL, types.ParamPrettyV1, true)
 	explainMode := getExplain(r.URL.Query()["explain"], types.ExplainOffV1)
 	includeMetrics := getBoolParam(r.URL, types.ParamMetricsV1, true)
 	includeInstrumentation := getBoolParam(r.URL, types.ParamInstrumentV1, true)
 
-	results, err := s.execQuery(ctx, r, qStr, nil, explainMode, includeMetrics, includeInstrumentation, pretty)
+	results, err := s.execQuery(ctx, r, qStr, input, explainMode, includeMetrics, includeInstrumentation, pretty)
+
 	if err != nil {
 		switch err := err.(type) {
 		case ast.Errors:

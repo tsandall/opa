@@ -157,6 +157,7 @@ type QueryResponseV1 struct {
 	Explanation TraceV1               `json:"explanation,omitempty"`
 	Metrics     MetricsV1             `json:"metrics,omitempty"`
 	Result      AdhocQueryResultSetV1 `json:"result,omitempty"`
+	Partial     []ast.Body            `json:"partial,omitempty"`
 }
 
 // WatchResponseV1 models a message in the response stream for a watch.
@@ -385,6 +386,11 @@ const (
 	// the client wants the partial evaluation optimization to be used during
 	// query evaluation.
 	ParamPartialV1 = "partial"
+
+	// ParamUnknownV1 defines the name of the HTTP URL parameter that indicates the
+	// client wants the policy to be evaluated with the referenced values being
+	// considered unknown.
+	ParamUnknownV1 = "unknown"
 
 	// ParamWatchV1 defines the name of the HTTP URL parameter that indicates
 	// the client wants to set a watch on the current query or data reference.
