@@ -1578,6 +1578,12 @@ func (e evalVirtualPartial) eval(iter unifyIterator) error {
 		}
 	}
 
+	generateSupport := refSliceContainsPrefix(e.e.noinline, e.plugged[:e.pos+1])
+
+	if generateSupport {
+		return e.partialEvalSupport(iter)
+	}
+
 	for _, rule := range e.ir.Rules {
 		if err := e.evalOneRule(iter, rule, cacheKey); err != nil {
 			return err
@@ -1658,6 +1664,62 @@ func (e evalVirtualPartial) evalOneRule(iter unifyIterator, rule *ast.Rule, cach
 	}
 
 	return nil
+}
+
+func (e evalVirtualPartial) partialEvalSupport(iter unifyIterator) error {
+
+	path := e.plugged[:e.pos+1].Insert(e.e.saveNamespace, 1)
+
+	if !e.e.saveSupport.Exists(path) {
+		for i := range e.ir.Rules {
+			err := e.partialEvalSupportRule(iter, e.ir.Rules[i], path)
+			if err != nil {
+				return err
+			}
+		}
+	}
+
+	rewritten := ast.NewTerm(e.ref.Insert(e.e.saveNamespace, 1))
+	return e.e.saveUnify(rewritten, e.rterm, e.bindings, e.rbindings, iter)
+}
+
+func (e evalVirtualPartial) partialEvalSupportRule(iter unifyIterator, rule *ast.Rule, path ast.Ref) error {
+
+	child := e.e.child(rule.Body)
+	child.traceEnter(rule)
+
+	e.e.saveStack.PushQuery(nil)
+	defer e.e.saveStack.PopQuery()
+
+	return child.eval(func(child *eval) error {
+		child.traceExit(rule)
+
+		current := e.e.saveStack.PopQuery()
+		defer e.e.saveStack.PushQuery(current)
+		plugged := current.Plug(child.bindings)
+
+		var key, value *ast.Term
+
+		if rule.Head.Key != nil {
+			key = child.bindings.PlugNamespaced(rule.Head.Key, child.bindings)
+		}
+
+		if rule.Head.Value != nil {
+			value = child.bindings.PlugNamespaced(rule.Head.Value, child.bindings)
+		}
+
+		head := ast.NewHead(rule.Head.Name, key, value)
+		p := copypropagation.New(head.Vars()).WithEnsureNonEmptyBody(true)
+
+		e.e.saveSupport.Insert(path, &ast.Rule{
+			Head:    head,
+			Body:    p.Apply(plugged),
+			Default: rule.Default,
+		})
+
+		child.traceRedo(rule)
+		return nil
+	})
 }
 
 func (e evalVirtualPartial) evalTerm(iter unifyIterator, term *ast.Term, termbindings *bindings) error {
