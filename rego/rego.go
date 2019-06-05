@@ -80,6 +80,7 @@ type EvalContext struct {
 	tracers          []topdown.Tracer
 	compiledQuery    compiledQuery
 	unknowns         []string
+	noinline         []ast.Ref
 	parsedUnknowns   []*ast.Term
 }
 
@@ -149,6 +150,14 @@ func EvalUnknowns(unknowns []string) EvalOption {
 	}
 }
 
+// EvalNoInline returns an argument that adds a set of paths to exclude from
+// partial evaluation inlining.
+func EvalNoInline(paths []ast.Ref) EvalOption {
+	return func(e *EvalContext) {
+		e.noinline = paths
+	}
+}
+
 // EvalParsedUnknowns returns an argument that sets the values to treat
 // as unknown during partial evaluation.
 func EvalParsedUnknowns(unknowns []*ast.Term) EvalOption {
@@ -170,6 +179,7 @@ func (pq preparedQuery) newEvalContext(ctx context.Context, options []EvalOption
 		tracers:          pq.r.tracers,
 		unknowns:         pq.r.unknowns,
 		parsedUnknowns:   pq.r.parsedUnknowns,
+		noinline:         pq.r.noinline,
 		compiledQuery:    compiledQuery{},
 	}
 
@@ -359,6 +369,7 @@ type Rego struct {
 	parsedInput      ast.Value
 	unknowns         []string
 	parsedUnknowns   []*ast.Term
+	noinline         []ast.Ref
 	partialNamespace string
 	modules          []rawModule
 	parsedModules    map[string]*ast.Module
@@ -457,6 +468,13 @@ func Unknowns(unknowns []string) func(r *Rego) {
 func ParsedUnknowns(unknowns []*ast.Term) func(r *Rego) {
 	return func(r *Rego) {
 		r.parsedUnknowns = unknowns
+	}
+}
+
+// NoInline adds a set of paths to exclude from partial evaluation inlining.
+func NoInline(paths []ast.Ref) func(r *Rego) {
+	return func(r *Rego) {
+		r.noinline = paths
 	}
 }
 
@@ -791,6 +809,7 @@ type PrepareOption func(*PrepareConfig)
 // Prepare call.
 type PrepareConfig struct {
 	doPartialEval bool
+	noinline      *[]ast.Ref
 }
 
 // WithPartialEval configures an option for PrepareForEval
@@ -799,6 +818,13 @@ type PrepareConfig struct {
 func WithPartialEval() PrepareOption {
 	return func(p *PrepareConfig) {
 		p.doPartialEval = true
+	}
+}
+
+// WithNoInline adds a set of paths to exclude from partial evaluation inlining.
+func WithNoInline(paths []ast.Ref) PrepareOption {
+	return func(p *PrepareConfig) {
+		p.noinline = &paths
 	}
 }
 
@@ -849,6 +875,11 @@ func (r *Rego) PrepareForEval(ctx context.Context, opts ...PrepareOption) (Prepa
 			partialNamespace: r.partialNamespace,
 			tracers:          r.tracers,
 			compiledQuery:    r.compiledQueries[partialResultQueryType],
+			noinline:         r.noinline,
+		}
+
+		if pCfg.noinline != nil {
+			ectx.noinline = *pCfg.noinline
 		}
 
 		pr, err := r.partialResult(ctx, ectx, ast.Wildcard)
@@ -1253,6 +1284,7 @@ func (r *Rego) partial(ctx context.Context, ectx *EvalContext) (*PartialQueries,
 		WithMetrics(ectx.metrics).
 		WithInstrumentation(ectx.instrumentation).
 		WithUnknowns(unknowns).
+		WithNoInline(ectx.noinline).
 		WithRuntime(r.runtime)
 
 	for i := range ectx.tracers {

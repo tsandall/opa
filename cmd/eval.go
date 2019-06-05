@@ -33,6 +33,7 @@ type evalCommandParams struct {
 	coverage          bool
 	partial           bool
 	unknowns          []string
+	noinline          []string
 	dataPaths         repeatedStringFlag
 	inputPath         string
 	imports           repeatedStringFlag
@@ -182,6 +183,7 @@ Set the output format with the --format flag.
 	evalCommand.Flags().BoolVarP(&params.coverage, "coverage", "", false, "report coverage")
 	evalCommand.Flags().BoolVarP(&params.partial, "partial", "p", false, "perform partial evaluation")
 	evalCommand.Flags().StringSliceVarP(&params.unknowns, "unknowns", "u", []string{"input"}, "set paths to treat as unknown during partial evaluation")
+	evalCommand.Flags().StringSliceVarP(&params.noinline, "partial-no-inline", "", []string{}, "set paths of documents to exclude from inlining")
 	evalCommand.Flags().VarP(&params.dataPaths, "data", "d", "set data file(s) or directory path(s)")
 	evalCommand.Flags().StringVarP(&params.inputPath, "input", "i", "", "set input file path")
 	evalCommand.Flags().VarP(&params.imports, "import", "", "set query import(s)")
@@ -288,6 +290,18 @@ func eval(args []string, params evalCommandParams, w io.Writer) (bool, error) {
 	if params.partial {
 		regoArgs = append(regoArgs, rego.Unknowns(params.unknowns))
 	}
+
+	noinline := make([]ast.Ref, len(params.noinline))
+
+	for i, s := range params.noinline {
+		ref, err := ast.ParseRef(s)
+		if err != nil {
+			return false, err
+		}
+		noinline[i] = ref
+	}
+
+	regoArgs = append(regoArgs, rego.NoInline(noinline))
 
 	var c *cover.Cover
 

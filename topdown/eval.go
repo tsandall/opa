@@ -49,6 +49,7 @@ type eval struct {
 	saveStack     *saveStack
 	saveSupport   *saveSupport
 	saveNamespace *ast.Term
+	noinline      []ast.Ref
 	genvarprefix  string
 	runtime       *ast.Term
 }
@@ -1717,17 +1718,22 @@ func (e evalVirtualComplete) eval(iter unifyIterator) error {
 		return e.evalValue(iter)
 	}
 
-	if e.ir.Default != nil {
-		rterm := e.rbindings.Plug(e.rterm)
+	var generateSupport bool
 
+	if e.ir.Default != nil {
 		// If the other term is not constant OR it's equal to the default value, then
 		// a support rule must be produced as the default value _may_ be required. On
 		// the other hand, if the other term is constant (i.e., it does not require
 		// evaluation) and it differs from the default value then the default value is
 		// _not_ required, so partially evaluate the rule normally.
-		if !ast.IsConstant(rterm.Value) || e.ir.Default.Head.Value.Equal(rterm) {
-			return e.partialEvalDefault(iter)
-		}
+		rterm := e.rbindings.Plug(e.rterm)
+		generateSupport = !ast.IsConstant(rterm.Value) || e.ir.Default.Head.Value.Equal(rterm)
+	}
+
+	generateSupport = generateSupport || refSliceContainsPrefix(e.e.noinline, e.plugged[:e.pos+1])
+
+	if generateSupport {
+		return e.partialEvalSupport(iter)
 	}
 
 	return e.partialEval(iter)
@@ -1834,22 +1840,24 @@ func (e evalVirtualComplete) partialEval(iter unifyIterator) error {
 	return nil
 }
 
-func (e evalVirtualComplete) partialEvalDefault(iter unifyIterator) error {
+func (e evalVirtualComplete) partialEvalSupport(iter unifyIterator) error {
 
 	path := e.plugged[:e.pos+1].Insert(e.e.saveNamespace, 1)
 
 	if !e.e.saveSupport.Exists(path) {
 
 		for i := range e.ir.Rules {
-			err := e.partialEvalDefaultRule(iter, e.ir.Rules[i], path)
+			err := e.partialEvalSupportRule(iter, e.ir.Rules[i], path)
 			if err != nil {
 				return err
 			}
 		}
 
-		err := e.partialEvalDefaultRule(iter, e.ir.Default, path)
-		if err != nil {
-			return err
+		if e.ir.Default != nil {
+			err := e.partialEvalSupportRule(iter, e.ir.Default, path)
+			if err != nil {
+				return err
+			}
 		}
 	}
 
@@ -1857,7 +1865,7 @@ func (e evalVirtualComplete) partialEvalDefault(iter unifyIterator) error {
 	return e.e.saveUnify(rewritten, e.rterm, e.bindings, e.rbindings, iter)
 }
 
-func (e evalVirtualComplete) partialEvalDefaultRule(iter unifyIterator, rule *ast.Rule, path ast.Ref) error {
+func (e evalVirtualComplete) partialEvalSupportRule(iter unifyIterator, rule *ast.Rule, path ast.Ref) error {
 
 	child := e.e.child(rule.Body)
 	child.traceEnter(rule)
@@ -2169,4 +2177,13 @@ func mergeObjects(objA, objB ast.Object) (result ast.Object, ok bool) {
 		}
 	})
 	return result, true
+}
+
+func refSliceContainsPrefix(sl []ast.Ref, prefix ast.Ref) bool {
+	for _, ref := range sl {
+		if ref.HasPrefix(prefix) {
+			return true
+		}
+	}
+	return false
 }
