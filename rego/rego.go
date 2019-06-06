@@ -875,6 +875,7 @@ func (r *Rego) PrepareForEval(ctx context.Context, opts ...PrepareOption) (Prepa
 			partialNamespace: r.partialNamespace,
 			tracers:          r.tracers,
 			compiledQuery:    r.compiledQueries[partialResultQueryType],
+			instrumentation:  r.instrumentation,
 			noinline:         r.noinline,
 		}
 
