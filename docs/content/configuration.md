@@ -52,9 +52,6 @@ status:
   service: acmecorp
 
 default_decision: /http/example/authz/allow
-
-metrics_provider:
-    name: prometheus
 ```
 
 ## Environment Variable Substitution
@@ -235,7 +232,7 @@ itself to the service.
 ### Bearer token
 
 OPA will authenticate using the specified bearer token and schema; to enable bearer token
-authentication, the token must be specified. The schema is optional and will default to `Bearer` 
+authentication, the token must be specified. The schema is optional and will default to `Bearer`
 if unspecified.
 
 | Field | Type | Required | Description |
@@ -257,8 +254,8 @@ private key is encrypted.
 
 ### AWS signature
 
-OPA will authenticate with an [AWS4 HMAC](https://docs.aws.amazon.com/AmazonS3/latest/API/sigv4-auth-using-authorization-header.html) signature. Two methods of obtaining the 
-necessary credentials are available; exactly one must be specified to use the AWS signature 
+OPA will authenticate with an [AWS4 HMAC](https://docs.aws.amazon.com/AmazonS3/latest/API/sigv4-auth-using-authorization-header.html) signature. Two methods of obtaining the
+necessary credentials are available; exactly one must be specified to use the AWS signature
 authentication method.
 
 If specifying `environment_credentials`, OPA will expect to find environment variables
@@ -269,19 +266,19 @@ convention used by the [AWS CLI](https://docs.aws.amazon.com/cli/latest/userguid
 | --- | --- | --- | --- |
 | `services[_].credentials.s3_signing.environment_credentials` | `{}` | Yes | Enables AWS signing using environment variables to source the configuration and credentials |
 
-If specifying `metadata_credentials`, OPA will use the AWS metadata services for [EC2](https://docs.aws.amazon.com/AWSEC2/latest/UserGuide/iam-roles-for-amazon-ec2.html) 
+If specifying `metadata_credentials`, OPA will use the AWS metadata services for [EC2](https://docs.aws.amazon.com/AWSEC2/latest/UserGuide/iam-roles-for-amazon-ec2.html)
 or [ECS](https://docs.aws.amazon.com/AmazonECS/latest/userguide/task-iam-roles.html)
-to obtain the necessary credentials when running within a supported virtual machine/container. 
+to obtain the necessary credentials when running within a supported virtual machine/container.
 
-To use the EC2 metadata service, the IAM role to use and the AWS region for the resource must both 
-be specified as `iam_role` and `aws_region` respectively. 
+To use the EC2 metadata service, the IAM role to use and the AWS region for the resource must both
+be specified as `iam_role` and `aws_region` respectively.
 
 To use the ECS metadata service, specify only the AWS region for the resource as `aws_region`. ECS
 containers have at most one associated IAM role.
 
-**N.B.** Providing a value for `iam_role` will cause OPA to use the EC2 metadata service even 
-if running inside an ECS container. This may result in unexpected problems if, for example, 
-there is no route to the EC2 metadata service from inside the container or if the IAM role is only available within the container and not from the hosting EC2 instance. 
+**N.B.** Providing a value for `iam_role` will cause OPA to use the EC2 metadata service even
+if running inside an ECS container. This may result in unexpected problems if, for example,
+there is no route to the EC2 metadata service from inside the container or if the IAM role is only available within the container and not from the hosting EC2 instance.
 
 | Field | Type | Required | Description |
 | --- | --- | --- | --- |
@@ -346,7 +343,6 @@ server provenance, etc.
 | --- | --- | --- | --- |
 | `status.service` | `string` | Yes | Name of service to use to contact remote server. |
 | `status.partition_name` | `string` | No | Path segment to include in status updates. |
-| `status.include_metrics` | `boolean` | (default: `false`)  | Include Prometheus metrics in status updates. |
 
 ## Decision Logs
 
@@ -360,7 +356,7 @@ server provenance, etc.
 | `decision_logs.reporting.max_delay_seconds` | `int64` | No (default: `600`) | Maximum amount of time to wait between uploads. |
 | `decision_logs.mask_decision` | `string` | No (default: `system/log/mask`) | Set path of masking decision. |
 | `decision_logs.plugin` | `string` | No | Use the named plugin for decision logging. If this field exists, the other configuration fields are not required. |
-| `decision_logs.console` | `boolean` | No (default: `false`) | Log the decisions locally at `info` level to the console. When enabled alongside a remote decision logging API the `service` must be configured, the default `service` selection will be disabled. | 
+| `decision_logs.console` | `boolean` | No (default: `false`) | Log the decisions locally at `info` level to the console. When enabled alongside a remote decision logging API the `service` must be configured, the default `service` selection will be disabled. |
 
 ## Discovery
 
@@ -371,15 +367,3 @@ server provenance, etc.
 | `discovery.decision` | `string` | No (default: value of `discovery.name` configuration field) | Name of the OPA query that will be used to calculate the configuration |
 | `discovery.polling.min_delay_seconds` | `int64` | No (default: `60`) | Minimum amount of time to wait between configuration downloads. |
 | `discovery.polling.max_delay_seconds` | `int64` | No (default: `120`) | Maximum amount of time to wait between configuration downloads. |
-
-
-## Metrics provider
-
-| Field | Type | Required | Description |
-| --- | --- | --- | --- |
-| `metrics_provider.name` | `string` | No | Name of the metrics provider to use. |
-| `metrics_provider.config` | `object` | No | Provider-specific configuration (not used as of now). |
-
-Available metrics providers:
-* `prometheus` (default)
-*  (empty string): do not collect metrics
