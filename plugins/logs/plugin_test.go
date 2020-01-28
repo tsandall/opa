@@ -441,6 +441,8 @@ func TestPluginReconfigure(t *testing.T) {
 		t.Fatal(err)
 	}
 
+	ensurePluginState(t, fixture.plugin, plugins.StateOK)
+
 	minDelay := 2
 	maxDelay := 3
 
@@ -455,7 +457,10 @@ func TestPluginReconfigure(t *testing.T) {
 	config, _ := ParseConfig(pluginConfig, fixture.manager.Services(), nil)
 
 	fixture.plugin.Reconfigure(ctx, config)
+	ensurePluginState(t, fixture.plugin, plugins.StateOK)
+
 	fixture.plugin.Stop(ctx)
+	ensurePluginState(t, fixture.plugin, plugins.StateNotReady)
 
 	actualMin := time.Duration(*fixture.plugin.config.Reporting.MinDelaySeconds) / time.Nanosecond
 	expectedMin := time.Duration(minDelay) * time.Second
@@ -882,7 +887,13 @@ func newTestFixture(t *testing.T) testFixture {
 
 	config, _ := ParseConfig([]byte(pluginConfig), manager.Services(), nil)
 
+	if s, ok := manager.PluginStatus()[Name]; ok {
+		t.Fatalf("Unexpected status found in plugin manager for %s: %+v", Name, s)
+	}
+
 	p := New(config, manager)
+
+	ensurePluginState(t, p, plugins.StateNotReady)
 
 	return testFixture{
 		manager: manager,
@@ -1020,4 +1031,16 @@ func getWellKnownMetrics() metrics.Metrics {
 	m := metrics.New()
 	m.Counter("test_counter").Incr()
 	return m
+}
+
+func ensurePluginState(t *testing.T, p *Plugin, state plugins.State) {
+	t.Helper()
+	status, ok := p.manager.PluginStatus()[Name]
+	if !ok {
+		t.Fatalf("Expected to find state for %s, found nil", Name)
+		return
+	}
+	if status.State != state {
+		t.Fatalf("Unexpected status state found in plugin manager for %s:\n\n\tFound:%+v\n\n\tExpected: %s", Name, status.State, plugins.StateOK)
+	}
 }
