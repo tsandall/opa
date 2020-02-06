@@ -126,9 +126,7 @@ type Manager struct {
 	services              map[string]rest.Client
 	plugins               []namedplugin
 	registeredTriggers    []func(txn storage.Transaction)
-	pluginMtx             sync.Mutex
-	configMtx             sync.Mutex
-	pluginStatusMtx       sync.Mutex
+	mtx                   sync.Mutex
 	pluginStatus          map[string]*Status
 	pluginStatusListeners map[string]StatusListener
 }
@@ -198,31 +196,29 @@ func New(raw []byte, id string, store storage.Store, opts ...func(*Manager)) (*M
 
 // Labels returns the set of labels from the configuration.
 func (m *Manager) Labels() map[string]string {
-	m.configMtx.Lock()
-	defer m.configMtx.Unlock()
+	m.mtx.Lock()
+	defer m.mtx.Unlock()
 	return m.Config.Labels
 }
 
 // Register adds a plugin to the manager. When the manager is started, all of
 // the plugins will be started.
 func (m *Manager) Register(name string, plugin Plugin) {
-	m.pluginMtx.Lock()
-	defer m.pluginMtx.Unlock()
+	m.mtx.Lock()
+	defer m.mtx.Unlock()
 	m.plugins = append(m.plugins, namedplugin{
 		name:   name,
 		plugin: plugin,
 	})
-	m.pluginStatusMtx.Lock()
 	if _, ok := m.pluginStatus[name]; !ok {
 		m.pluginStatus[name] = nil
 	}
-	m.pluginStatusMtx.Unlock()
 }
 
 // Plugins returns the list of plugins registered with the manager.
 func (m *Manager) Plugins() []string {
-	m.pluginMtx.Lock()
-	defer m.pluginMtx.Unlock()
+	m.mtx.Lock()
+	defer m.mtx.Unlock()
 	result := make([]string, len(m.plugins))
 	for i := range m.plugins {
 		result[i] = m.plugins[i].name
@@ -232,8 +228,8 @@ func (m *Manager) Plugins() []string {
 
 // Plugin returns the plugin registered with name or nil if name is not found.
 func (m *Manager) Plugin(name string) Plugin {
-	m.pluginMtx.Lock()
-	defer m.pluginMtx.Unlock()
+	m.mtx.Lock()
+	defer m.mtx.Unlock()
 	for i := range m.plugins {
 		if m.plugins[i].name == name {
 			return m.plugins[i].plugin
@@ -258,8 +254,8 @@ func (m *Manager) setCompiler(compiler *ast.Compiler) {
 // RegisterCompilerTrigger registers for change notifications when the compiler
 // is changed.
 func (m *Manager) RegisterCompilerTrigger(f func(txn storage.Transaction)) {
-	m.pluginMtx.Lock()
-	defer m.pluginMtx.Unlock()
+	m.mtx.Lock()
+	defer m.mtx.Unlock()
 	m.registeredTriggers = append(m.registeredTriggers, f)
 }
 
@@ -282,14 +278,22 @@ func (m *Manager) Start(ctx context.Context) error {
 		return err
 	}
 
-	m.pluginMtx.Lock()
-	for _, p := range m.plugins {
-		if err := p.plugin.Start(ctx); err != nil {
-			m.pluginMtx.Unlock()
+	var toStart []Plugin
+
+	func() {
+		m.mtx.Lock()
+		defer m.mtx.Unlock()
+		toStart = make([]Plugin, len(m.plugins))
+		for i := range m.plugins {
+			toStart[i] = m.plugins[i].plugin
+		}
+	}()
+
+	for i := range toStart {
+		if err := toStart[i].Start(ctx); err != nil {
 			return err
 		}
 	}
-	m.pluginMtx.Unlock()
 
 	config := storage.TriggerConfig{OnCommit: m.onCommit}
 
@@ -301,10 +305,19 @@ func (m *Manager) Start(ctx context.Context) error {
 
 // Stop stops the manager, stopping all the plugins registered with it
 func (m *Manager) Stop(ctx context.Context) {
-	m.pluginMtx.Lock()
-	defer m.pluginMtx.Unlock()
-	for _, p := range m.plugins {
-		p.plugin.Stop(ctx)
+	var toStop []Plugin
+
+	func() {
+		m.mtx.Lock()
+		defer m.mtx.Unlock()
+		toStop = make([]Plugin, len(m.plugins))
+		for i := range m.plugins {
+			toStop[i] = m.plugins[i].plugin
+		}
+	}()
+
+	for i := range toStop {
+		toStop[i].Stop(ctx)
 	}
 }
 
@@ -314,8 +327,8 @@ func (m *Manager) Reconfigure(config *config.Config) error {
 	if err != nil {
 		return err
 	}
-	m.configMtx.Lock()
-	defer m.configMtx.Unlock()
+	m.mtx.Lock()
+	defer m.mtx.Unlock()
 	config.Labels = m.Config.Labels // don't overwrite labels
 	m.Config = config
 	for name, client := range services {
@@ -326,8 +339,8 @@ func (m *Manager) Reconfigure(config *config.Config) error {
 
 // PluginStatus returns the current statuses of any plugins registered.
 func (m *Manager) PluginStatus() map[string]*Status {
-	m.pluginStatusMtx.Lock()
-	defer m.pluginStatusMtx.Unlock()
+	m.mtx.Lock()
+	defer m.mtx.Unlock()
 
 	return m.copyPluginStatus()
 }
@@ -335,8 +348,8 @@ func (m *Manager) PluginStatus() map[string]*Status {
 // RegisterPluginStatusListener registers a StatusListener to be
 // called when plugin status updates occur.
 func (m *Manager) RegisterPluginStatusListener(name string, listener StatusListener) {
-	m.pluginStatusMtx.Lock()
-	defer m.pluginStatusMtx.Unlock()
+	m.mtx.Lock()
+	defer m.mtx.Unlock()
 
 	m.pluginStatusListeners[name] = listener
 }
@@ -344,8 +357,8 @@ func (m *Manager) RegisterPluginStatusListener(name string, listener StatusListe
 // UnregisterPluginStatusListener removes a StatusListener registered with the
 // same name.
 func (m *Manager) UnregisterPluginStatusListener(name string) {
-	m.pluginStatusMtx.Lock()
-	defer m.pluginStatusMtx.Unlock()
+	m.mtx.Lock()
+	defer m.mtx.Unlock()
 
 	delete(m.pluginStatusListeners, name)
 }
@@ -354,13 +367,23 @@ func (m *Manager) UnregisterPluginStatusListener(name string) {
 // listeners will be called with a copy of the new state of all
 // plugins.
 func (m *Manager) UpdatePluginStatus(pluginName string, status *Status) {
-	m.pluginStatusMtx.Lock()
-	defer m.pluginStatusMtx.Unlock()
 
-	m.pluginStatus[pluginName] = status
+	var toNotify map[string]StatusListener
+	var statuses map[string]*Status
 
-	for _, listener := range m.pluginStatusListeners {
-		listener(m.copyPluginStatus())
+	func() {
+		m.mtx.Lock()
+		defer m.mtx.Unlock()
+		m.pluginStatus[pluginName] = status
+		toNotify = make(map[string]StatusListener, len(m.pluginStatusListeners))
+		for k, v := range m.pluginStatusListeners {
+			toNotify[k] = v
+		}
+		statuses = m.copyPluginStatus()
+	}()
+
+	for _, l := range toNotify {
+		l(statuses)
 	}
 }
 
@@ -419,15 +442,15 @@ func loadCompilerFromStore(ctx context.Context, store storage.Store, txn storage
 
 // Client returns a client for communicating with a remote service.
 func (m *Manager) Client(name string) rest.Client {
-	m.configMtx.Lock()
-	defer m.configMtx.Unlock()
+	m.mtx.Lock()
+	defer m.mtx.Unlock()
 	return m.services[name]
 }
 
 // Services returns a list of services that m can provide clients for.
 func (m *Manager) Services() []string {
-	m.configMtx.Lock()
-	defer m.configMtx.Unlock()
+	m.mtx.Lock()
+	defer m.mtx.Unlock()
 	s := make([]string, 0, len(m.services))
 	for name := range m.services {
 		s = append(s, name)
