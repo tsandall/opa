@@ -8,6 +8,7 @@ package plugins
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"sync"
 
 	"github.com/open-policy-agent/opa/ast"
@@ -89,21 +90,59 @@ type Plugin interface {
 
 // State defines the state that a Plugin instance is currently
 // in with pre-defined states.
-type State string
+type State int
 
 const (
-	// StateNotReady indicates that the Plugin is not in an error state, but isn't
-	// ready for normal operation yet. This should only happen at
+	// StateUnknown indicates the Plugin state has not been set. If the plugin
+	// state has not been set it assumed the plugin is functional.
+	StateUnknown State = iota
+
+	// StateNotReady indicates that the Plugin is not in an error state, but
+	// isn't ready for normal operation yet. This should only happen at
 	// initialization time.
-	StateNotReady State = "NOT_READY"
+	StateNotReady
 
 	// StateOK signifies that the Plugin is operating normally.
-	StateOK State = "OK"
+	StateOK
 
 	// StateErr indicates that the Plugin is in an error state and should not
 	// be considered as functional.
-	StateErr State = "ERROR"
+	StateErr
 )
+
+var stateStrings = [...]string{
+	"UNKNOWN",
+	"NOT_READY",
+	"OK",
+	"ERROR",
+}
+
+func (s State) String() string {
+	if int(s) > len(stateStrings) {
+		return "<illegal state>"
+	}
+	return stateStrings[s]
+}
+
+// MarshalJSON serializes the state to a JSON encoded string.
+func (s State) MarshalJSON() ([]byte, error) {
+	return json.Marshal(s.String())
+}
+
+// UnmarshalJSON deserializes the state from a JSON encoded string.
+func (s *State) UnmarshalJSON(b []byte) error {
+	var str string
+	if err := json.Unmarshal(b, &str); err != nil {
+		return err
+	}
+	for i := range stateStrings {
+		if stateStrings[i] == str {
+			*s = State(i)
+			return nil
+		}
+	}
+	return errors.New("illegal State")
+}
 
 // Status has a Plugin's current status plus an optional Message.
 type Status struct {
@@ -211,7 +250,7 @@ func (m *Manager) Register(name string, plugin Plugin) {
 		plugin: plugin,
 	})
 	if _, ok := m.pluginStatus[name]; !ok {
-		m.pluginStatus[name] = nil
+		m.pluginStatus[name] = &Status{}
 	}
 }
 
