@@ -1,0 +1,1284 @@
+package ast
+
+import (
+	"encoding/json"
+	"fmt"
+	"io"
+
+	"github.com/open-policy-agent/opa/ast/internal/scanner"
+	"github.com/open-policy-agent/opa/ast/internal/tokens"
+	"github.com/open-policy-agent/opa/ast/location"
+)
+
+// NOTE(tsandall): Explain why state is organized this way. Shallow copying.
+type state struct {
+	s        *scanner.Scanner
+	last     scanner.Position
+	pos      scanner.Position
+	tok      tokens.Token
+	lit      string
+	loc      Location
+	errors   Errors
+	comments []*Comment
+	wildcard int
+}
+
+func (s *state) String() string {
+	return fmt.Sprintf("<s: %v, tok: %v, lit: %q, loc: %v, errors: %d, comments: %d>", s.s, s.tok, s.lit, s.loc, len(s.errors), len(s.comments))
+}
+
+func (s *state) Loc() *location.Location {
+	cpy := s.loc
+	return &cpy
+}
+
+func (s *state) Text(offset, end int) []byte {
+	bs := s.s.Bytes()
+	if offset >= 0 && offset < len(bs) {
+		if end >= offset && end <= len(bs) {
+			return bs[offset:end]
+		}
+	}
+	return nil
+}
+
+type Parser struct {
+	r io.Reader
+	s *state
+}
+
+func NewParser() *Parser {
+	p := &Parser{s: &state{}}
+	return p
+}
+
+func (p *Parser) WithFilename(filename string) *Parser {
+	p.s.loc.File = filename
+	return p
+}
+
+func (p *Parser) WithReader(r io.Reader) *Parser {
+	p.r = r
+	return p
+}
+
+func (p *Parser) Parse() ([]Statement, []*Comment, Errors) {
+
+	var err error
+	p.s.s, err = scanner.New(p.r)
+	if err != nil {
+		return nil, nil, Errors{
+			&Error{
+				Code:     ParseErr,
+				Message:  err.Error(),
+				Location: nil,
+			},
+		}
+	}
+
+	// read the first token to initialize the parser
+	p.scan()
+
+	var stmts []Statement
+
+	// Read from the scanner until the last token is reached or no statements
+	// can be parsed. Attempt to parse package statements, import statements,
+	// rule statements, and then body/query statements (in that order). If a
+	// statement cannot be parsed, restore the parser state before trying the
+	// next type of statement. If a statement can be parsed, continue from that
+	// point trying to parse packages, imports, etc. in the same order.
+	for p.s.tok != tokens.EOF {
+
+		s := p.save()
+
+		if pkg := p.parsePackage(); pkg != nil {
+			stmts = append(stmts, pkg)
+			continue
+		} else if len(p.s.errors) > 0 {
+			break
+		}
+
+		p.restore(s)
+		s = p.save()
+
+		if imp := p.parseImport(); imp != nil {
+			stmts = append(stmts, imp)
+			continue
+		} else if len(p.s.errors) > 0 {
+			break
+		}
+
+		p.restore(s)
+		s = p.save()
+
+		if rules := p.parseRules(); rules != nil {
+			for i := range rules {
+				stmts = append(stmts, rules[i])
+			}
+			continue
+		} else if len(p.s.errors) > 0 {
+			break
+		}
+
+		p.restore(s)
+		s = p.save()
+
+		if body := p.parseQuery(true, tokens.EOF); body != nil {
+			stmts = append(stmts, body)
+			continue
+		}
+
+		break
+	}
+
+	return stmts, p.s.comments, p.s.errors
+}
+
+func (p *Parser) parsePackage() *Package {
+
+	var pkg Package
+	pkg.SetLoc(p.s.Loc())
+
+	if p.s.tok != tokens.Package {
+		return nil
+	}
+
+	p.scan()
+	if p.s.tok != tokens.Ident {
+		p.error(p.s.Loc(), "expected ident")
+		return nil
+	}
+
+	term := p.parseTerm()
+
+	if term != nil {
+		switch v := term.Value.(type) {
+		case Var:
+			pkg.Path = Ref{
+				DefaultRootDocument.Copy().SetLocation(term.Location),
+				StringTerm(string(v)).SetLocation(term.Location),
+			}
+		case Ref:
+			pkg.Path = make(Ref, len(v)+1)
+			pkg.Path[0] = DefaultRootDocument.Copy().SetLocation(v[0].Location)
+			pkg.Path[1] = StringTerm(string(v[0].Value.(Var))).SetLocation(v[0].Location)
+			for i := 2; i < len(pkg.Path); i++ {
+				switch v[i-1].Value.(type) {
+				case String:
+					pkg.Path[i] = v[i-1]
+				default:
+					p.errorf(v[i-1].Location, "unexpected %v, expecting string", TypeName(v[i-1].Value))
+					return nil
+				}
+			}
+		}
+	}
+
+	if pkg.Path == nil {
+		p.error(p.s.Loc(), "expected path")
+		return nil
+	}
+
+	return &pkg
+}
+
+func (p *Parser) parseImport() *Import {
+
+	var imp Import
+	imp.SetLoc(p.s.Loc())
+
+	if p.s.tok != tokens.Import {
+		return nil
+	}
+
+	p.scan()
+	if p.s.tok != tokens.Ident {
+		p.error(p.s.Loc(), "expected ident")
+		return nil
+	}
+
+	term := p.parseTerm()
+
+	switch v := term.Value.(type) {
+	case Var:
+		imp.Path = RefTerm(term).SetLocation(term.Location)
+	case Ref:
+		for i := 1; i < len(v); i++ {
+			if _, ok := v[i].Value.(String); !ok {
+				p.errorf(v[i].Location, "unexpected %v, expecting string", TypeName(v[i].Value))
+				return nil
+			}
+		}
+		imp.Path = term
+	default:
+		p.error(p.s.Loc(), "expected path")
+		return nil
+	}
+
+	path := imp.Path.Value.(Ref)
+
+	if !RootDocumentNames.Contains(path[0]) {
+		p.errorf(imp.Path.Location, "unexpected import path, must begin with one of: %v, got: %v", RootDocumentNames, path[0])
+		return nil
+	}
+
+	if p.s.tok == tokens.As {
+		p.scan()
+
+		if p.s.tok != tokens.Ident {
+			p.error(p.s.Loc(), "expected var")
+			return nil
+		}
+
+		alias := p.parseTerm()
+
+		if v, ok := alias.Value.(Var); !ok {
+			p.error(p.s.Loc(), "expected var")
+			return nil
+		} else {
+			imp.Alias = v
+		}
+	}
+
+	return &imp
+}
+
+func (p *Parser) parseRules() []*Rule {
+
+	var rule Rule
+	rule.SetLoc(p.s.Loc())
+
+	switch p.s.tok {
+	case tokens.Default:
+		p.scan()
+		rule.Default = true
+	case tokens.Ident:
+		break
+	default:
+		return nil
+	}
+
+	if rule.Head = p.parseHead(rule.Default); rule.Head == nil {
+		return nil
+	}
+
+	if rule.Default {
+		rule.Body = NewBody(NewExpr(BooleanTerm(true).SetLocation(rule.Location)).SetLocation(rule.Location))
+		return []*Rule{&rule}
+	}
+
+	if p.s.tok == tokens.LBrace {
+		p.scan()
+		if rule.Body = p.parseBody(tokens.RBrace); rule.Body == nil {
+			return nil
+		}
+		p.scan()
+	} else {
+		return nil
+	}
+
+	if p.s.tok == tokens.Else {
+
+		if rule.Head.Assign {
+			p.error(p.s.Loc(), "else keyword cannot be used on rule declared with := operator")
+			return nil
+		}
+
+		if rule.Head.Key != nil {
+			p.error(p.s.Loc(), "else keyword cannot be used on partial rules")
+			return nil
+		}
+
+		if rule.Else = p.parseElse(rule.Head); rule.Else == nil {
+			return nil
+		}
+	}
+
+	var rules []*Rule
+
+	rules = append(rules, &rule)
+
+	for p.s.tok == tokens.LBrace {
+
+		if rule.Else != nil {
+			p.error(p.s.Loc(), "expected else keyword")
+			return nil
+		}
+
+		loc := p.s.Loc()
+
+		p.scan()
+		var next Rule
+
+		if next.Body = p.parseBody(tokens.RBrace); next.Body == nil {
+			return nil
+		}
+
+		next.Head = rule.Head.Copy()
+		setLocRecursive(next.Head, loc)
+		next.SetLoc(loc)
+		rules = append(rules, &next)
+		p.scan()
+	}
+
+	return rules
+}
+
+func (p *Parser) parseElse(head *Head) *Rule {
+
+	var rule Rule
+	rule.SetLoc(p.s.Loc())
+	p.scan()
+
+	switch p.s.tok {
+	case tokens.LBrace:
+		p.scan()
+
+		if rule.Body = p.parseBody(tokens.RBrace); rule.Body == nil {
+			return nil
+		}
+
+		p.scan()
+
+		if p.s.tok == tokens.Else {
+			if rule.Else = p.parseElse(head); rule.Else == nil {
+				return nil
+			}
+		}
+		rule.Head = head.Copy()
+		setLocRecursive(rule.Head, rule.Location)
+		return &rule
+
+	case tokens.Unify:
+		p.scan()
+		rule.Head = head.Copy()
+		rule.Head.Value = p.parseTermRelation()
+		setLocRecursive(rule.Head, rule.Location)
+
+		if rule.Head.Value == nil {
+			return nil
+		}
+
+		if p.s.tok != tokens.LBrace {
+			return &rule
+		}
+
+		p.scan()
+
+		if rule.Body = p.parseBody(tokens.RBrace); rule.Body == nil {
+			return nil
+		}
+
+		p.scan()
+
+		if p.s.tok == tokens.Else {
+			if rule.Else = p.parseElse(head); rule.Else == nil {
+				return nil
+			}
+		}
+
+		return &rule
+	default:
+		p.illegal("expected else value term or rule body")
+		return nil
+	}
+}
+
+func (p *Parser) parseHead(defaultRule bool) *Head {
+
+	var head Head
+	head.SetLoc(p.s.Loc())
+
+	head.Name = Var(p.s.lit)
+	p.scan()
+
+	if p.s.tok == tokens.LParen {
+		p.scan()
+		if p.s.tok == tokens.RParen {
+			return nil
+		}
+		head.Args = p.parseTermList(tokens.RParen, nil)
+		if head.Args == nil {
+			return nil
+		}
+		p.scan()
+	}
+
+	if p.s.tok == tokens.LBrack {
+		p.scan()
+		head.Key = p.parseTermRelation()
+		if head.Key == nil {
+			// TODO(tsandall): replace 'p' with actual rule name below.
+			p.illegal("expected rule key term (e.g., p[<VALUE>] { ... })")
+		}
+		if p.s.tok != tokens.RBrack {
+			p.illegal("non-terminated rule key")
+		}
+		p.scan()
+	}
+
+	if p.s.tok == tokens.Unify {
+		p.scan()
+		head.Value = p.parseTermRelation()
+		if head.Value == nil {
+			p.illegal("expected rule value term (e.g., p := <VALUE> { ... })")
+		}
+	} else if p.s.tok == tokens.Assign {
+
+		if defaultRule {
+			p.error(p.s.Loc(), "default rules must use = operator (not := operator)")
+			return nil
+		} else if head.Key != nil {
+			p.error(p.s.Loc(), "partial rules must use = operator (not := operator)")
+			return nil
+		} else if len(head.Args) > 0 {
+			p.error(p.s.Loc(), "functions must use = operator (not := operator)")
+			return nil
+		}
+
+		p.scan()
+		head.Assign = true
+		head.Value = p.parseTermRelation()
+		if head.Value == nil {
+			p.illegal("expected rule value term (e.g., p := <VALUE> { ... })")
+		}
+	}
+
+	if head.Value == nil && head.Key == nil {
+		head.Value = BooleanTerm(true).SetLocation(head.Location)
+	}
+
+	return &head
+}
+
+func (p *Parser) parseBody(end tokens.Token) Body {
+	return p.parseQuery(false, end)
+}
+
+func (p *Parser) parseQuery(requireSemi bool, end tokens.Token) Body {
+	body := Body{}
+	for {
+
+		expr := p.parseLiteral()
+		if expr == nil {
+			return nil
+		}
+
+		body.Append(expr)
+
+		if p.s.tok == tokens.Semicolon {
+			p.scan()
+			continue
+		}
+
+		if p.s.tok == end || requireSemi {
+			return body
+		}
+	}
+}
+
+func (p *Parser) parseLiteral() (expr *Expr) {
+
+	offset := p.s.pos.Offset
+	loc := p.s.Loc()
+
+	defer func() {
+		if expr != nil {
+			loc.Text = p.s.Text(offset, p.s.last.End)
+			expr.SetLoc(loc)
+		}
+	}()
+
+	var negated bool
+	switch p.s.tok {
+	case tokens.Some:
+		return p.parseSome()
+	case tokens.Not:
+		p.scan()
+		negated = true
+		fallthrough
+	default:
+		expr := p.parseExpr()
+		if expr != nil {
+			expr.Negated = negated
+			if p.s.tok == tokens.With {
+				if expr.With = p.parseWith(); expr.With == nil {
+					return nil
+				}
+			}
+			return expr
+		}
+		return nil
+	}
+}
+
+func (p *Parser) parseWith() []*With {
+
+	withs := []*With{}
+
+	for {
+
+		// NOTE(tsandall): location is not being set correctly on with
+		// statements. need special test case for this.
+
+		var with With
+		p.scan()
+
+		if p.s.tok != tokens.Ident {
+			p.illegal("expected ident")
+			return nil
+		}
+
+		if with.Target = p.parseTerm(); with.Target == nil {
+			return nil
+		}
+
+		switch with.Target.Value.(type) {
+		case Ref, Var:
+			break
+		default:
+			p.illegal("expected with target path")
+		}
+
+		if p.s.tok != tokens.As {
+			p.illegal("expected as keyword")
+			return nil
+		}
+
+		p.scan()
+
+		if with.Value = p.parseTermRelation(); with.Value == nil {
+			return nil
+		}
+
+		withs = append(withs, &with)
+
+		if p.s.tok != tokens.With {
+			break
+		}
+	}
+
+	return withs
+}
+
+func (p *Parser) parseSome() *Expr {
+
+	decl := &SomeDecl{}
+	decl.SetLoc(p.s.Loc())
+
+	for {
+
+		p.scan()
+
+		switch p.s.tok {
+		case tokens.Ident:
+		}
+
+		if p.s.tok != tokens.Ident {
+			p.illegal("expected var")
+			return nil
+		}
+
+		decl.Symbols = append(decl.Symbols, p.parseTermVar())
+
+		p.scan()
+
+		if p.s.tok != tokens.Comma {
+			break
+		}
+	}
+
+	return NewExpr(decl).SetLocation(decl.Location)
+}
+
+func (p *Parser) parseExpr() *Expr {
+
+	lhs := p.parseTermRelation()
+
+	if lhs == nil {
+		return nil
+	}
+
+	if op := p.parseTermOp(tokens.Assign, tokens.Unify); op != nil {
+		rhs := p.parseTermRelation()
+		return NewExpr([]*Term{op, lhs, rhs})
+	}
+
+	// NOTE(tsandall): the top-level call term is converted to an expr because
+	// the evaluator does not support the call term type (nested calls are
+	// rewritten by the compiler.)
+	if call, ok := lhs.Value.(Call); ok {
+		return NewExpr([]*Term(call))
+	}
+
+	return NewExpr(lhs)
+}
+
+// parseTermRelation consumes the next term from the input and returns it. If a
+// term cannot be parsed the return value is nil and error will be recorded. The
+// scanner will be advanced to the next token before returning.
+func (p *Parser) parseTermRelation() *Term {
+	return p.parseTermRelationRec(nil, p.s.pos.Offset)
+}
+
+func (p *Parser) parseTermRelationRec(lhs *Term, offset int) *Term {
+	if lhs == nil {
+		lhs = p.parseTermOr()
+	}
+	if lhs != nil {
+		if op := p.parseTermOp(tokens.Equal, tokens.Neq, tokens.Lt, tokens.Gt, tokens.Lte, tokens.Gte); op != nil {
+			if rhs := p.parseTermOr(); rhs != nil {
+				call := p.setLoc(CallTerm(op, lhs, rhs), lhs.Location, offset, p.s.last.End)
+				switch p.s.tok {
+				case tokens.Equal, tokens.Neq, tokens.Lt, tokens.Gt, tokens.Lte, tokens.Gte:
+					return p.parseTermRelationRec(call, offset)
+				default:
+					return call
+				}
+			}
+		}
+	}
+	return lhs
+}
+
+func (p *Parser) parseTermOr() *Term {
+	offset := p.s.pos.Offset
+	if lhs := p.parseTermAnd(); lhs != nil {
+		if op := p.parseTermOp(tokens.Or); op != nil {
+			rhs := p.parseTermOr()
+			return p.setLoc(CallTerm(op, lhs, rhs), lhs.Location, offset, p.s.last.End)
+		}
+		return lhs
+	}
+	return nil
+}
+
+func (p *Parser) parseTermAnd() *Term {
+	offset := p.s.pos.Offset
+	if lhs := p.parseTermArith(nil, offset); lhs != nil {
+		if op := p.parseTermOp(tokens.And); op != nil {
+			rhs := p.parseTermAnd()
+			return p.setLoc(CallTerm(op, lhs, rhs), lhs.Location, offset, p.s.last.End)
+		}
+		return lhs
+	}
+	return nil
+}
+
+func (p *Parser) parseTermArith(lhs *Term, offset int) *Term {
+	if lhs == nil {
+		lhs = p.parseTermFactor(nil, offset)
+	}
+	if lhs != nil {
+		if op := p.parseTermOp(tokens.Add, tokens.Sub); op != nil {
+			if rhs := p.parseTermFactor(nil, p.s.pos.Offset); rhs != nil {
+				call := p.setLoc(CallTerm(op, lhs, rhs), lhs.Location, offset, p.s.last.End)
+				switch p.s.tok {
+				case tokens.Add, tokens.Sub:
+					return p.parseTermArith(call, offset)
+				default:
+					return call
+				}
+			}
+		}
+	}
+	return lhs
+}
+
+func (p *Parser) parseTermFactor(lhs *Term, offset int) *Term {
+	if lhs == nil {
+		lhs = p.parseTerm()
+	}
+	if lhs != nil {
+		if op := p.parseTermOp(tokens.Mul, tokens.Quo, tokens.Rem); op != nil {
+			if rhs := p.parseTerm(); rhs != nil {
+				call := p.setLoc(CallTerm(op, lhs, rhs), lhs.Location, offset, p.s.last.End)
+				switch p.s.tok {
+				case tokens.Mul, tokens.Quo, tokens.Rem:
+					return p.parseTermFactor(call, offset)
+				default:
+					return call
+				}
+			}
+		}
+	}
+	return lhs
+}
+
+func (p *Parser) parseTerm() *Term {
+	switch p.s.tok {
+	case tokens.Null:
+		r := NullTerm().SetLocation(p.s.Loc())
+		p.scan()
+		return r
+	case tokens.True:
+		r := BooleanTerm(true).SetLocation(p.s.Loc())
+		p.scan()
+		return r
+	case tokens.False:
+		r := BooleanTerm(false).SetLocation(p.s.Loc())
+		p.scan()
+		return r
+	case tokens.Sub, tokens.Dot, tokens.Number:
+		return p.parseNumber()
+	case tokens.String:
+		return p.parseString()
+	case tokens.Ident:
+		return p.parseTermFinish(p.parseTermVar())
+	case tokens.LBrack:
+		return p.parseTermFinish(p.parseArray())
+	case tokens.LBrace:
+		return p.parseTermFinish(p.parseSetOrObject())
+	case tokens.LParen:
+		offset := p.s.pos.Offset
+		p.scan()
+		if r := p.parseTermRelation(); r != nil {
+			if p.s.tok == tokens.RParen {
+				r.Location.Text = p.s.Text(offset, p.s.pos.End)
+				p.scan()
+				return r
+			}
+			p.error(p.s.Loc(), "non-terminated expression")
+		}
+		return nil
+	}
+	p.illegal("expected term")
+	return nil
+}
+
+func (p *Parser) parseTermFinish(head *Term) *Term {
+	if head == nil {
+		return nil
+	}
+	offset := p.s.pos.Offset
+	p.scanWS()
+	switch p.s.tok {
+	case tokens.LParen, tokens.Dot, tokens.LBrack:
+		return p.parseRef(head, offset)
+	case tokens.Whitespace:
+		p.scan()
+		fallthrough
+	default:
+		if RootDocumentNames.Contains(head) {
+			return RefTerm(head).SetLocation(head.Location)
+		}
+		return head
+	}
+}
+
+func (p *Parser) parseNumber() *Term {
+	var prefix string
+	loc := p.s.Loc()
+	if p.s.tok == tokens.Sub {
+		prefix = "-"
+		p.scan()
+		switch p.s.tok {
+		case tokens.Number, tokens.Dot:
+			break
+		default:
+			p.error(p.s.Loc(), "expected number")
+			return nil
+		}
+	}
+	if p.s.tok == tokens.Dot {
+		prefix += "."
+		p.scan()
+		if p.s.tok != tokens.Number {
+			p.error(p.s.Loc(), "expected nubmer")
+			return nil
+		}
+	}
+	r := NumberTerm(json.Number(prefix + p.s.lit)).SetLocation(loc)
+	p.scan()
+	return r
+}
+
+func (p *Parser) parseString() *Term {
+	if p.s.lit[0] == '"' {
+		var s string
+		err := json.Unmarshal([]byte(p.s.lit), &s)
+		if err != nil {
+			p.error(p.s.Loc(), "illegal string literal")
+			return nil
+		}
+		term := StringTerm(s).SetLocation(p.s.Loc())
+		p.scan()
+		return term
+	}
+	return p.parseRawString()
+}
+
+func (p *Parser) parseRawString() *Term {
+	if len(p.s.lit) < 2 {
+		return nil
+	}
+	term := StringTerm(p.s.lit[1 : len(p.s.lit)-1]).SetLocation(p.s.Loc())
+	p.scan()
+	return term
+}
+
+// this is the name to use for instantiating an empty set, e.g., `set()`.
+var setConstructor = RefTerm(VarTerm("set"))
+
+func (p *Parser) parseCall(operator *Term, offset int) (term *Term) {
+
+	loc := operator.Location
+	var end int
+
+	defer func() {
+		p.setLoc(term, loc, offset, end)
+	}()
+
+	p.scan()
+
+	if p.s.tok == tokens.RParen {
+		end = p.s.pos.End
+		p.scanWS()
+		if operator.Equal(setConstructor) {
+			return SetTerm()
+		}
+		return CallTerm(operator)
+	}
+
+	if r := p.parseTermList(tokens.RParen, []*Term{operator}); r != nil {
+		end = p.s.pos.End
+		p.scanWS()
+		return CallTerm(r...)
+	}
+
+	return nil
+}
+
+func (p *Parser) parseRef(head *Term, offset int) (term *Term) {
+
+	loc := head.Location
+	var end int
+
+	defer func() {
+		p.setLoc(term, loc, offset, end)
+	}()
+
+	ref := []*Term{head}
+
+	for {
+		switch p.s.tok {
+		case tokens.Dot:
+			p.scanWS()
+			if p.s.tok != tokens.Ident {
+				p.illegal("expected %v", tokens.Ident)
+				return nil
+			}
+			ref = append(ref, StringTerm(p.s.lit).SetLocation(p.s.Loc()))
+			p.scanWS()
+		case tokens.LParen:
+			term := p.parseCall(p.setLoc(RefTerm(ref...), loc, offset, p.s.pos.Offset), offset)
+			switch p.s.tok {
+			case tokens.Whitespace:
+				p.scan()
+				end = p.s.last.End
+				return term
+			case tokens.Dot, tokens.LBrack:
+				term = p.parseRef(term, offset)
+			}
+			end = p.s.pos.End
+			return term
+		case tokens.LBrack:
+			p.scan()
+			if term := p.parseTermRelation(); term != nil {
+				if p.s.tok != tokens.RBrack {
+					p.illegal("expected %v", tokens.LBrack)
+					return nil
+				}
+				ref = append(ref, term)
+				// TODO: add test case for this like we did for parseCall
+				p.scanWS()
+			} else {
+				return nil
+			}
+		case tokens.Whitespace:
+			end = p.s.last.End
+			p.scan()
+			return RefTerm(ref...)
+		default:
+			end = p.s.last.End
+			return RefTerm(ref...)
+		}
+	}
+}
+
+func (p *Parser) parseArray() (term *Term) {
+
+	loc := p.s.Loc()
+	offset := p.s.pos.Offset
+
+	defer func() {
+		p.setLoc(term, loc, offset, p.s.pos.End)
+	}()
+
+	p.scan()
+
+	if p.s.tok == tokens.RBrack {
+		return ArrayTerm()
+	}
+
+	s := p.save()
+
+	// NOTE(tsandall): The parser cannot attempt a relational term here because
+	// of ambiguity around comprehensions. For example, given:
+	//
+	//  {1 | 1}
+	//
+	// Does this represent a set comprehension or a set containing binary OR
+	// call? We resolve the ambiguity by prioritizing comprehensions.
+	head := p.parseTerm()
+
+	if head == nil {
+		return nil
+	}
+
+	switch p.s.tok {
+	case tokens.RBrack:
+		return ArrayTerm(head)
+	case tokens.Comma:
+		p.scan()
+		if terms := p.parseTermList(tokens.RBrack, []*Term{head}); terms != nil {
+			return NewTerm(Array(terms))
+		}
+		return nil
+	case tokens.Or:
+		p.scan()
+		if body := p.parseBody(tokens.RBrack); body != nil {
+			return ArrayComprehensionTerm(head, body)
+		}
+		if p.s.tok != tokens.Comma {
+			return nil
+		}
+		fallthrough
+	default:
+		p.restore(s)
+		if terms := p.parseTermList(tokens.RBrack, nil); terms != nil {
+			return NewTerm(Array(terms))
+		}
+		return nil
+	}
+}
+
+func (p *Parser) parseSetOrObject() (term *Term) {
+
+	loc := p.s.Loc()
+	offset := p.s.pos.Offset
+
+	defer func() {
+		p.setLoc(term, loc, offset, p.s.pos.End)
+	}()
+
+	p.scan()
+
+	if p.s.tok == tokens.RBrace {
+		return ObjectTerm()
+	}
+
+	s := p.save()
+	head := p.parseTerm()
+
+	if head == nil {
+		return nil
+	}
+
+	switch p.s.tok {
+	case tokens.Or, tokens.RBrace, tokens.Comma:
+		return p.parseSet(s, head)
+	case tokens.Colon:
+		return p.parseObject(head)
+	}
+
+	p.restore(s)
+
+	if head = p.parseTermRelation(); head == nil {
+		return nil
+	}
+
+	switch p.s.tok {
+	case tokens.RBrace, tokens.Comma, tokens.Or:
+		return p.parseSet(s, head)
+	case tokens.Colon:
+		p.scan()
+		if val := p.parseTermRelation(); val != nil {
+			switch p.s.tok {
+			case tokens.RBrace, tokens.Comma, tokens.Or:
+				return p.parseObjectFinish(head, val)
+			default:
+				p.illegal("non-terminated object")
+			}
+		}
+	default:
+		p.illegal("non-terminated set")
+	}
+
+	return nil
+}
+
+func (p *Parser) parseSet(s *state, head *Term) *Term {
+	switch p.s.tok {
+	case tokens.RBrace:
+		return SetTerm(head)
+	case tokens.Comma:
+		p.scan()
+		if terms := p.parseTermList(tokens.RBrace, []*Term{head}); terms != nil {
+			return SetTerm(terms...)
+		}
+		return nil
+	case tokens.Or:
+		p.scan()
+		if body := p.parseBody(tokens.RBrace); body != nil {
+			return SetComprehensionTerm(head, body)
+		}
+		if p.s.tok != tokens.Comma {
+			return nil
+		}
+		p.restore(s)
+		if terms := p.parseTermList(tokens.RBrace, nil); terms != nil {
+			return SetTerm(terms...)
+		}
+		return nil
+	}
+	return nil
+}
+
+func (p *Parser) parseObject(k *Term) *Term {
+	// NOTE(tsandall): Assumption: this function is called after parsing the key
+	// of the head elemenet and then receiving a colon token from the scanner.
+	// Advance beyond the colon and attempt to parse an object.
+	p.scan()
+
+	s := p.save()
+	v := p.parseTerm()
+
+	if v == nil {
+		return nil
+	}
+
+	switch p.s.tok {
+	case tokens.RBrace, tokens.Comma, tokens.Or:
+		if term := p.parseObjectFinish(k, v); term != nil {
+			return term
+		}
+	}
+
+	p.restore(s)
+
+	if v = p.parseTermRelation(); v == nil {
+		return nil
+	}
+
+	switch p.s.tok {
+	case tokens.Comma, tokens.RBrace:
+		return p.parseObjectFinish(k, v)
+	default:
+		p.illegal("non-terminated object")
+	}
+
+	return nil
+}
+
+func (p *Parser) parseObjectFinish(key, val *Term) *Term {
+	switch p.s.tok {
+	case tokens.RBrace:
+		return ObjectTerm([2]*Term{key, val})
+	case tokens.Or:
+		p.scan()
+		if body := p.parseBody(tokens.RBrace); body != nil {
+			return ObjectComprehensionTerm(key, val, body)
+		}
+	case tokens.Comma:
+		p.scan()
+		if r := p.parseTermPairList(tokens.RBrace, [][2]*Term{{key, val}}); r != nil {
+			return ObjectTerm(r...)
+		}
+	}
+	return nil
+}
+
+func (p *Parser) parseTermList(end tokens.Token, r []*Term) []*Term {
+	if p.s.tok == end {
+		return r
+	}
+	for {
+		term := p.parseTermRelation()
+		if term != nil {
+			r = append(r, term)
+			switch p.s.tok {
+			case end:
+				return r
+			case tokens.Comma:
+				p.scan()
+				if p.s.tok == end {
+					return r
+				}
+				continue
+			default:
+				p.illegal(fmt.Sprintf("expected %q or %q", tokens.Comma, end))
+				return nil
+			}
+		}
+		return nil
+	}
+}
+
+func (p *Parser) parseTermPairList(end tokens.Token, r [][2]*Term) [][2]*Term {
+	if p.s.tok == end {
+		return r
+	}
+	for {
+		key := p.parseTermRelation()
+		if key != nil {
+			switch p.s.tok {
+			case tokens.Colon:
+				p.scan()
+				if val := p.parseTermRelation(); val != nil {
+					r = append(r, [2]*Term{key, val})
+					switch p.s.tok {
+					case end:
+						return r
+					case tokens.Comma:
+						p.scan()
+						if p.s.tok == end {
+							return r
+						}
+						continue
+					default:
+						p.illegal(fmt.Sprintf("expected %q or %q", tokens.Comma, end))
+						return nil
+					}
+				}
+			default:
+				p.illegal(fmt.Sprintf("expected %q", tokens.Colon))
+				return nil
+			}
+		}
+		return nil
+	}
+}
+
+func (p *Parser) parseTermOp(values ...tokens.Token) *Term {
+	for i := range values {
+		if p.s.tok == values[i] {
+			r := RefTerm(VarTerm(fmt.Sprint(p.s.tok)).SetLocation(p.s.Loc())).SetLocation(p.s.Loc())
+			p.scan()
+			return r
+		}
+	}
+	return nil
+}
+
+func (p *Parser) parseTermVar() *Term {
+
+	s := p.s.lit
+
+	// TODO(tsandall): refactor to use constant defined elsewhere
+	if s == "_" {
+		s = p.genwildcard()
+	}
+
+	return VarTerm(s).SetLocation(p.s.Loc())
+}
+
+func (p *Parser) genwildcard() string {
+	c := p.s.wildcard
+	p.s.wildcard++
+	return fmt.Sprintf("%v%d", WildcardPrefix, c)
+}
+
+func (p *Parser) error(loc *location.Location, reason string) {
+	p.errorf(loc, reason)
+}
+
+func (p *Parser) errorf(loc *location.Location, f string, a ...interface{}) {
+	p.s.errors = append(p.s.errors, &Error{
+		Code:     ParseErr,
+		Message:  fmt.Sprintf(f, a...),
+		Location: loc,
+		Details:  newParserErrorDetail(p.s.s.Bytes(), p.s.pos.Offset),
+	})
+}
+
+func (p *Parser) illegal(note string, a ...interface{}) {
+
+	if p.s.tok >= tokens.Package && p.s.tok <= tokens.False {
+		p.errorf(p.s.Loc(), "unexpected %v keyword: %v", p.s.tok, fmt.Sprintf(note, a...))
+		return
+	}
+
+	p.errorf(p.s.Loc(), "unexpected %v token: %v", p.s.tok, fmt.Sprintf(note, a...))
+}
+
+func (p *Parser) scan() {
+	p.doScan(true)
+}
+
+func (p *Parser) scanWS() {
+	p.doScan(false)
+}
+
+func (p *Parser) doScan(skipws bool) {
+
+	// NOTE(tsandall): the last position is used to compute the "text" field for
+	// complex AST nodes. Whitespace never affects the last position of an AST
+	// node so do not update it when scanning.
+	if p.s.tok != tokens.Whitespace {
+		p.s.last = p.s.pos
+	}
+
+	for {
+		p.s.tok, p.s.pos, p.s.lit = p.s.s.Scan()
+
+		if skipws && p.s.tok == tokens.Whitespace {
+			continue
+		}
+
+		p.s.loc.Row = p.s.pos.Row
+		p.s.loc.Col = p.s.pos.Col
+		p.s.loc.Text = p.s.Text(p.s.pos.Offset, p.s.pos.End)
+
+		for _, err := range p.s.s.Errors() {
+			p.error(p.s.Loc(), err.Message)
+		}
+
+		if p.s.tok != tokens.Comment {
+			break
+		}
+
+		comment := NewComment([]byte(p.s.lit))
+		comment.SetLoc(p.s.Loc())
+		p.s.comments = append(p.s.comments, comment)
+	}
+}
+
+func (p *Parser) save() *state {
+	cpy := *p.s
+	s := *cpy.s
+	cpy.s = &s
+	return &cpy
+}
+
+func (p *Parser) restore(s *state) {
+	p.s = s
+}
+
+func setLocRecursive(x interface{}, loc *location.Location) {
+	NewGenericVisitor(func(x interface{}) bool {
+		if node, ok := x.(Node); ok {
+			node.SetLoc(loc)
+		}
+		return false
+	}).Walk(x)
+}
+
+func (p *Parser) setLoc(term *Term, loc *location.Location, offset, end int) *Term {
+	if term != nil {
+		cpy := *loc
+		term.Location = &cpy
+		term.Location.Text = p.s.Text(offset, end)
+	}
+	return term
+}
