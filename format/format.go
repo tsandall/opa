@@ -443,13 +443,12 @@ func (w *writer) writeTermParens(parens bool, term *ast.Term, comments []*ast.Co
 	case *ast.SetComprehension:
 		comments = w.writeSetComprehension(x, term.Location, comments)
 	case ast.String:
-		if term.Location.Text[0] == '.' {
-			// This string was parsed from a ref, so preserve the value.
-			w.write(`"` + string(x) + `"`)
-		} else {
+		if term.Location.Text[0] == '`' {
 			// To preserve raw strings, we need to output the original text,
 			// not what x.String() would give us.
 			w.write(string(term.Location.Text))
+		} else {
+			w.write(x.String())
 		}
 	case ast.Call:
 		comments = w.writeCall(parens, x, term.Location, comments)
