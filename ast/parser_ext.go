@@ -11,8 +11,8 @@
 package ast
 
 import (
+	"bytes"
 	"fmt"
-	"sort"
 	"strings"
 	"unicode"
 
@@ -530,73 +530,13 @@ func (a commentKey) Compare(other commentKey) int {
 // This is the default return value from the parser.
 func ParseStatements(filename, input string) ([]Statement, []*Comment, error) {
 
-	bs := []byte(input)
+	stmts, comment, errs := NewParser().WithFilename(filename).WithReader(bytes.NewBufferString(input)).Parse()
 
-	parsed, err := Parse(filename, bs, GlobalStore(filenameKey, filename), CommentsOption())
-	if err != nil {
-		return nil, nil, formatParserErrors(filename, bs, err)
+	if len(errs) > 0 {
+		return nil, nil, errs
 	}
 
-	var comments []*Comment
-	var sl []interface{}
-	if p, ok := parsed.(program); ok {
-		sl = p.buf
-		commentMap := p.comments.(map[commentKey]*Comment)
-		commentKeys := []commentKey{}
-		for k := range commentMap {
-			commentKeys = append(commentKeys, k)
-		}
-		sort.Slice(commentKeys, func(i, j int) bool {
-			return commentKeys[i].Compare(commentKeys[j]) < 0
-		})
-		for _, k := range commentKeys {
-			comments = append(comments, commentMap[k])
-		}
-	} else {
-		sl = parsed.([]interface{})
-	}
-	stmts := make([]Statement, 0, len(sl))
-
-	for _, x := range sl {
-		if rules, ok := x.([]*Rule); ok {
-			for _, rule := range rules {
-				stmts = append(stmts, rule)
-			}
-		} else {
-			// Unchecked cast should be safe. A panic indicates grammar is
-			// out-of-sync.
-			stmts = append(stmts, x.(Statement))
-		}
-	}
-
-	return stmts, comments, postProcess(filename, stmts)
-}
-
-func formatParserErrors(filename string, bs []byte, err error) error {
-	// Errors returned by the parser are always of type errList and the errList
-	// always contains *parserError.
-	// https://godoc.org/github.com/mna/pigeon#hdr-Error_reporting.
-	errs := err.(errList)
-	r := make(Errors, len(errs))
-	for i, e := range errs {
-		r[i] = formatParserError(filename, bs, e.(*parserError))
-	}
-	return r
-}
-
-func formatParserError(filename string, bs []byte, e *parserError) *Error {
-	loc := NewLocation(nil, filename, e.pos.line, e.pos.col)
-	inner := e.Inner.Error()
-	idx := strings.Index(inner, "no match found")
-	if idx >= 0 {
-		// Match errors end with "no match found, expected: ...". We do not want to
-		// include ", expected: ..." as it does not provide any value, so truncate the
-		// string here.
-		inner = inner[:idx+14]
-	}
-	err := NewError(ParseErr, loc, inner)
-	err.Details = newParserErrorDetail(bs, e.pos)
-	return err
+	return stmts, comment, nil
 }
 
 func parseModule(filename string, stmts []Statement, comments []*Comment) (*Module, error) {
@@ -779,9 +719,7 @@ type ParserErrorDetail struct {
 	Idx  int    `json:"idx"`
 }
 
-func newParserErrorDetail(bs []byte, pos position) *ParserErrorDetail {
-
-	offset := pos.offset
+func newParserErrorDetail(bs []byte, offset int) *ParserErrorDetail {
 
 	// Find first non-space character at or before offset position.
 	if offset >= len(bs) {
