@@ -346,6 +346,7 @@ func (p *Parser) parseElse(head *Head) *Rule {
 			}
 		}
 		rule.Head = head.Copy()
+		rule.Head.Value = BooleanTerm(true)
 		setLocRecursive(rule.Head, rule.Location)
 		return &rule
 
@@ -623,11 +624,11 @@ func (p *Parser) parseTermRelation() *Term {
 
 func (p *Parser) parseTermRelationRec(lhs *Term, offset int) *Term {
 	if lhs == nil {
-		lhs = p.parseTermOr()
+		lhs = p.parseTermOr(nil, offset)
 	}
 	if lhs != nil {
 		if op := p.parseTermOp(tokens.Equal, tokens.Neq, tokens.Lt, tokens.Gt, tokens.Lte, tokens.Gte); op != nil {
-			if rhs := p.parseTermOr(); rhs != nil {
+			if rhs := p.parseTermOr(nil, p.s.pos.Offset); rhs != nil {
 				call := p.setLoc(CallTerm(op, lhs, rhs), lhs.Location, offset, p.s.last.End)
 				switch p.s.tok {
 				case tokens.Equal, tokens.Neq, tokens.Lt, tokens.Gt, tokens.Lte, tokens.Gte:
@@ -641,24 +642,42 @@ func (p *Parser) parseTermRelationRec(lhs *Term, offset int) *Term {
 	return lhs
 }
 
-func (p *Parser) parseTermOr() *Term {
-	offset := p.s.pos.Offset
-	if lhs := p.parseTermAnd(); lhs != nil {
+func (p *Parser) parseTermOr(lhs *Term, offset int) *Term {
+	if lhs == nil {
+		lhs = p.parseTermAnd(nil, offset)
+	}
+	if lhs != nil {
 		if op := p.parseTermOp(tokens.Or); op != nil {
-			rhs := p.parseTermOr()
-			return p.setLoc(CallTerm(op, lhs, rhs), lhs.Location, offset, p.s.last.End)
+			if rhs := p.parseTermAnd(nil, p.s.pos.Offset); rhs != nil {
+				call := p.setLoc(CallTerm(op, lhs, rhs), lhs.Location, offset, p.s.last.End)
+				switch p.s.tok {
+				case tokens.Or:
+					return p.parseTermOr(call, offset)
+				default:
+					return call
+				}
+			}
 		}
 		return lhs
 	}
 	return nil
 }
 
-func (p *Parser) parseTermAnd() *Term {
-	offset := p.s.pos.Offset
-	if lhs := p.parseTermArith(nil, offset); lhs != nil {
+func (p *Parser) parseTermAnd(lhs *Term, offset int) *Term {
+	if lhs == nil {
+		lhs = p.parseTermArith(nil, offset)
+	}
+	if lhs != nil {
 		if op := p.parseTermOp(tokens.And); op != nil {
-			rhs := p.parseTermAnd()
-			return p.setLoc(CallTerm(op, lhs, rhs), lhs.Location, offset, p.s.last.End)
+			if rhs := p.parseTermArith(nil, p.s.pos.Offset); rhs != nil {
+				call := p.setLoc(CallTerm(op, lhs, rhs), lhs.Location, offset, p.s.last.End)
+				switch p.s.tok {
+				case tokens.And:
+					return p.parseTermAnd(call, offset)
+				default:
+					return call
+				}
+			}
 		}
 		return lhs
 	}
