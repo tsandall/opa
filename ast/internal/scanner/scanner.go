@@ -331,7 +331,7 @@ func (s *Scanner) literalStart() int {
 // From the Go scanner (src/go/scanner/scanner.go)
 
 func isLetter(ch rune) bool {
-	return 'a' <= lower(ch) && lower(ch) <= 'z' || ch == '_' || ch >= utf8.RuneSelf && unicode.IsLetter(ch)
+	return 'a' <= lower(ch) && lower(ch) <= 'z' || ch == '_'
 }
 
 func isDigit(ch rune) bool {

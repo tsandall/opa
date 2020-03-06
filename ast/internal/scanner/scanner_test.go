@@ -158,3 +158,25 @@ func TestLiterals(t *testing.T) {
 	}
 
 }
+
+func TestIllegalTokens(t *testing.T) {
+
+	tests := []struct {
+		input string
+	}{
+		{input: `墳`},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.input, func(t *testing.T) {
+			s, err := New(bytes.NewBufferString(tc.input))
+			if err != nil {
+				t.Fatal(err)
+			}
+			tok, _, _ := s.Scan()
+			if tok != tokens.Illegal {
+				t.Fatalf("expected illegal token but got %v", tok)
+			}
+		})
+	}
+}
