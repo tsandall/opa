@@ -1413,7 +1413,7 @@ func TestComments(t *testing.T) {
 	for i := range exp {
 
 		expc := &Comment{
-			Text: []byte("# " + exp[i].text),
+			Text: []byte(" " + exp[i].text),
 			Location: &Location{
 				File: "test.rego",
 				Text: []byte("# " + exp[i].text),
