@@ -1611,6 +1611,10 @@ data = {"bar": 2} { true }`
 
 	some x`
 
+	arrayTerm := `
+	package a
+	[][0]`
+
 	assertParseModuleError(t, "multiple expressions", multipleExprs)
 	assertParseModuleError(t, "non-equality", nonEquality)
 	assertParseModuleError(t, "non-var name", nonVarName)
@@ -1622,6 +1626,7 @@ data = {"bar": 2} { true }`
 	assertParseModuleError(t, "zero args", zeroArgs)
 	assertParseModuleError(t, "assign to term", assignToTerm)
 	assertParseModuleError(t, "some decl", someDecl)
+	assertParseModuleError(t, "array term", arrayTerm)
 
 	if _, err := ParseRuleFromExpr(&Module{}, &Expr{
 		Terms: struct{}{},

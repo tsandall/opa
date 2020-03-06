@@ -288,11 +288,16 @@ func ParsePartialSetDocRuleFromTerm(module *Module, term *Term) (*Rule, error) {
 		return nil, fmt.Errorf("refs cannot be used for rule")
 	}
 
+	name, ok := ref[0].Value.(Var)
+	if !ok {
+		return nil, fmt.Errorf("%vs cannot be used for rule head", TypeName(ref[0].Value))
+	}
+
 	rule := &Rule{
 		Location: term.Location,
 		Head: &Head{
 			Location: term.Location,
-			Name:     ref[0].Value.(Var),
+			Name:     name,
 			Key:      ref[1],
 		},
 		Body: NewBody(
