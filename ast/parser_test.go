@@ -145,6 +145,7 @@ func TestVarTerms(t *testing.T) {
 	assertParseOneTerm(t, `true prefix`, "trueish", VarTerm("trueish"))
 	assertParseOneTerm(t, `false prefix`, "false_flag", VarTerm("false_flag"))
 	assertParseOneTerm(t, `null prefix`, "nullable", VarTerm("nullable"))
+	assertParseError(t, "illegal token", `墳`)
 	assertParseError(t, "not keyword", "not")
 	assertParseError(t, `package keyword`, "package")
 	assertParseError(t, "import keyword", "import")
