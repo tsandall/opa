@@ -312,7 +312,7 @@ func (c *Comment) SetLoc(loc *Location) {
 }
 
 func (c *Comment) String() string {
-	return string(c.Text)
+	return "#" + string(c.Text)
 }
 
 // Equal returns true if this comment equals the other comment.
