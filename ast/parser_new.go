@@ -1248,7 +1248,7 @@ func (p *Parser) doScan(skipws bool) {
 			break
 		}
 
-		comment := NewComment([]byte(p.s.lit))
+		comment := NewComment([]byte(p.s.lit[1:]))
 		comment.SetLoc(p.s.Loc())
 		p.s.comments = append(p.s.comments, comment)
 	}
