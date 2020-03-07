@@ -64,7 +64,7 @@ func TestPositions(t *testing.T) {
 			if err != nil {
 				t.Fatal(err)
 			}
-			_, pos, _ := s.Scan()
+			_, pos, _, _ := s.Scan()
 			if pos.Offset != tc.wantOffset {
 				t.Fatalf("want offset %d but got %d", tc.wantOffset, pos.Offset)
 			}
@@ -141,7 +141,7 @@ func TestLiterals(t *testing.T) {
 			if err != nil {
 				t.Fatal(err)
 			}
-			tok, pos, lit := s.Scan()
+			tok, pos, lit, errs := s.Scan()
 			if pos.Row != tc.wantRow {
 				t.Errorf("Expected row %d but got %d", tc.wantRow, pos.Row)
 			}
@@ -154,6 +154,9 @@ func TestLiterals(t *testing.T) {
 			if lit != tc.wantLit {
 				t.Errorf("Expected literal %v but got %v", tc.wantLit, lit)
 			}
+			if len(errs) > 0 {
+				t.Fatal("Unexpected error(s):", errs)
+			}
 		})
 	}
 
@@ -162,9 +165,11 @@ func TestLiterals(t *testing.T) {
 func TestIllegalTokens(t *testing.T) {
 
 	tests := []struct {
-		input string
+		input   string
+		wantErr bool
 	}{
 		{input: `墳`},
+		{input: `0e`, wantErr: true},
 	}
 
 	for _, tc := range tests {
@@ -173,9 +178,11 @@ func TestIllegalTokens(t *testing.T) {
 			if err != nil {
 				t.Fatal(err)
 			}
-			tok, _, _ := s.Scan()
-			if tok != tokens.Illegal {
-				t.Fatalf("expected illegal token but got %v", tok)
+			tok, _, _, errs := s.Scan()
+			if !tc.wantErr && tok != tokens.Illegal {
+				t.Fatalf("expected illegal token on %q but got %v", tc.input, tok)
+			} else if tc.wantErr && len(errs) == 0 {
+				t.Fatalf("expected errors on %q but got %v", tc.input, tok)
 			}
 		})
 	}

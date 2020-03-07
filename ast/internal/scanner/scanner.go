@@ -23,6 +23,11 @@ type Scanner struct {
 	filename string
 }
 
+type Error struct {
+	Pos     Position
+	Message string
+}
+
 type Position struct {
 	Offset int // start offset in bytes
 	End    int // end offset in bytes
@@ -63,16 +68,7 @@ func (s *Scanner) String() string {
 	return fmt.Sprintf("<curr: %q, offset: %d, len: %d>", s.curr, s.offset, len(s.bs))
 }
 
-type Error struct {
-	Pos     Position
-	Message string
-}
-
-func (s *Scanner) Errors() []Error {
-	return s.errors
-}
-
-func (s *Scanner) Scan() (tokens.Token, Position, string) {
+func (s *Scanner) Scan() (tokens.Token, Position, string, []Error) {
 
 	pos := Position{Offset: s.offset - s.width, Row: s.row, Col: s.col}
 	var tok tokens.Token
@@ -173,8 +169,10 @@ func (s *Scanner) Scan() (tokens.Token, Position, string) {
 	}
 
 	pos.End = s.offset - s.width
+	errs := s.errors
+	s.errors = nil
 
-	return tok, pos, lit
+	return tok, pos, lit, errs
 }
 
 func (s *Scanner) scanIdentifier() string {
@@ -189,7 +187,12 @@ func (s *Scanner) scanNumber() string {
 
 	start := s.offset - 1
 
-	if s.curr != '.' {
+	if s.curr == '0' {
+		s.next()
+		if s.curr != '.' && lower(s.curr) != 'e' {
+			return string(s.bs[start : s.offset-1])
+		}
+	} else {
 		for isDecimal(s.curr) {
 			s.next()
 		}
@@ -203,7 +206,7 @@ func (s *Scanner) scanNumber() string {
 			found = true
 		}
 		if !found {
-			s.error("expected digit in fraction")
+			s.error("expected fraction")
 		}
 	}
 
@@ -218,7 +221,7 @@ func (s *Scanner) scanNumber() string {
 			found = true
 		}
 		if !found {
-			s.error("expected digit in exponent")
+			s.error("expected exponent")
 		}
 	}
 

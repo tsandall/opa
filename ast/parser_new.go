@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"math/big"
 
 	"github.com/open-policy-agent/opa/ast/internal/scanner"
 	"github.com/open-policy-agent/opa/ast/internal/tokens"
@@ -807,7 +808,15 @@ func (p *Parser) parseNumber() *Term {
 			return nil
 		}
 	}
-	r := NumberTerm(json.Number(prefix + p.s.lit)).SetLocation(loc)
+
+	s := prefix + p.s.lit
+	_, ok := new(big.Float).SetString(s)
+	if !ok {
+		p.error(p.s.Loc(), "illegal numeric value")
+		return nil
+	}
+
+	r := NumberTerm(json.Number(s)).SetLocation(loc)
 	p.scan()
 	return r
 }
@@ -1248,8 +1257,20 @@ func (p *Parser) doScan(skipws bool) {
 		p.s.last = p.s.pos
 	}
 
+	var errs []scanner.Error
+
 	for {
-		p.s.tok, p.s.pos, p.s.lit = p.s.s.Scan()
+		p.s.tok, p.s.pos, p.s.lit, errs = p.s.s.Scan()
+
+		fmt.Println("tok:", p.s.tok, "pos:", p.s.pos, "errs:", errs)
+
+		for _, err := range errs {
+			p.error(p.s.Loc(), err.Message)
+		}
+
+		if len(errs) > 0 {
+			p.s.tok = tokens.Illegal
+		}
 
 		if skipws && p.s.tok == tokens.Whitespace {
 			continue
@@ -1258,10 +1279,6 @@ func (p *Parser) doScan(skipws bool) {
 		p.s.loc.Row = p.s.pos.Row
 		p.s.loc.Col = p.s.pos.Col
 		p.s.loc.Text = p.s.Text(p.s.pos.Offset, p.s.pos.End)
-
-		for _, err := range p.s.s.Errors() {
-			p.error(p.s.Loc(), err.Message)
-		}
 
 		if p.s.tok != tokens.Comment {
 			break
