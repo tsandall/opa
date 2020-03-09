@@ -1267,7 +1267,14 @@ func (p *Parser) doScan(skipws bool) {
 			break
 		}
 
-		comment := NewComment([]byte(p.s.lit[1:]))
+		// For backwards compatibility leave a nil
+		// Text value if there is no text rather than
+		// an empty string.
+		var commentText []byte
+		if len(p.s.lit) > 1 {
+			commentText = []byte(p.s.lit[1:])
+		}
+		comment := NewComment(commentText)
 		comment.SetLoc(p.s.Loc())
 		p.s.comments = append(p.s.comments, comment)
 	}
