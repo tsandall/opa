@@ -171,6 +171,7 @@ func TestRefTerms(t *testing.T) {
 	assertParseError(t, "missing component 1", "foo.")
 	assertParseError(t, "missing component 2", "foo[].bar")
 	assertParseError(t, "invalid composite operand", "foo[1,2]")
+	assertParseError(t, "invalid call", "bar(..")
 }
 
 func TestObjectWithScalars(t *testing.T) {
