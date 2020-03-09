@@ -894,14 +894,16 @@ func (p *Parser) parseRef(head *Term, offset int) (term *Term) {
 			ref = append(ref, StringTerm(p.s.lit).SetLocation(p.s.Loc()))
 			p.scanWS()
 		case tokens.LParen:
-			term := p.parseCall(p.setLoc(RefTerm(ref...), loc, offset, p.s.pos.Offset), offset)
-			switch p.s.tok {
-			case tokens.Whitespace:
-				p.scan()
-				end = p.s.last.End
-				return term
-			case tokens.Dot, tokens.LBrack:
-				term = p.parseRef(term, offset)
+			term = p.parseCall(p.setLoc(RefTerm(ref...), loc, offset, p.s.pos.Offset), offset)
+			if term != nil {
+				switch p.s.tok {
+				case tokens.Whitespace:
+					p.scan()
+					end = p.s.last.End
+					return term
+				case tokens.Dot, tokens.LBrack:
+					term = p.parseRef(term, offset)
+				}
 			}
 			end = p.s.pos.End
 			return term
