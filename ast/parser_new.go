@@ -263,6 +263,10 @@ func (p *Parser) parseRules() []*Rule {
 	}
 
 	if rule.Default {
+		if !p.validateDefaultRuleValue(rule.Head.Value) {
+			return nil
+		}
+
 		rule.Body = NewBody(NewExpr(BooleanTerm(true).SetLocation(rule.Location)).SetLocation(rule.Location))
 		return []*Rule{&rule}
 	}
@@ -1307,4 +1311,22 @@ func (p *Parser) setLoc(term *Term, loc *location.Location, offset, end int) *Te
 		term.Location.Text = p.s.Text(offset, end)
 	}
 	return term
+}
+
+func (p *Parser) validateDefaultRuleValue(value *Term) bool {
+	valid := true
+	vis := NewGenericVisitor(func(x interface{}) bool {
+		switch x.(type) {
+		case *ArrayComprehension, *ObjectComprehension, *SetComprehension: // skip closures
+			return true
+		case Ref, Var:
+			p.error(value.Loc(), fmt.Sprintf("default rule value cannot contain %v", TypeName(x)))
+			valid = false
+			return true
+		}
+		return false
+	})
+
+	vis.Walk(value)
+	return valid
 }
