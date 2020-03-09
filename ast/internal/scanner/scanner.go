@@ -274,13 +274,17 @@ func (s *Scanner) scanRawString() string {
 	return string(s.bs[start : s.offset-1])
 }
 
-// TODO(tsandall): windows \r\n
 func (s *Scanner) scanComment() string {
 	start := s.literalStart()
 	for s.curr != '\n' && s.curr != -1 {
 		s.next()
 	}
-	return string(s.bs[start : s.offset-1])
+	end := s.offset - 1
+	// Trim carriage returns that precede the newline
+	if s.offset > 1 && s.bs[s.offset-2] == '\r' {
+		end = end - 1
+	}
+	return string(s.bs[start:end])
 }
 
 func (s *Scanner) next() {
