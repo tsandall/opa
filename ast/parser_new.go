@@ -807,7 +807,7 @@ func (p *Parser) parseNumber() *Term {
 		prefix += "."
 		p.scan()
 		if p.s.tok != tokens.Number {
-			p.error(p.s.Loc(), "expected nubmer")
+			p.error(p.s.Loc(), "expected number")
 			return nil
 		}
 	}
