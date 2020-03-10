@@ -1663,7 +1663,8 @@ data = {"bar": 2} { true }`
 	assertParseModuleError(t, "zero args", zeroArgs)
 	assertParseModuleError(t, "assign to term", assignToTerm)
 	assertParseModuleError(t, "some decl", someDecl)
-	assertParseModuleError(t, "call in ref", "package test\nf().x {}")
+	assertParseModuleError(t, "call in ref partial set", "package test\nf().x {}")
+	assertParseModuleError(t, "call in ref partial object", "package test\nf().x = y {}")
 
 	if _, err := ParseRuleFromExpr(&Module{}, &Expr{
 		Terms: struct{}{},

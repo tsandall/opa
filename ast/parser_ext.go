@@ -255,6 +255,10 @@ func ParsePartialObjectDocRuleFromEqExpr(module *Module, lhs, rhs *Term) (*Rule,
 		return nil, fmt.Errorf("%v cannot be used for rule name", TypeName(lhs.Value))
 	}
 
+	if _, ok := ref[0].Value.(Var); !ok {
+		return nil, fmt.Errorf("%vs cannot be used in rule head", TypeName(ref[0].Value))
+	}
+
 	name := ref[0].Value.(Var)
 	key := ref[1]
 
