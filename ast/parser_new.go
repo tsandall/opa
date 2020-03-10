@@ -199,19 +199,22 @@ func (p *Parser) parseImport() *Import {
 	}
 
 	term := p.parseTerm()
-
-	switch v := term.Value.(type) {
-	case Var:
-		imp.Path = RefTerm(term).SetLocation(term.Location)
-	case Ref:
-		for i := 1; i < len(v); i++ {
-			if _, ok := v[i].Value.(String); !ok {
-				p.errorf(v[i].Location, "unexpected %v, expecting string", TypeName(v[i].Value))
-				return nil
+	if term != nil {
+		switch v := term.Value.(type) {
+		case Var:
+			imp.Path = RefTerm(term).SetLocation(term.Location)
+		case Ref:
+			for i := 1; i < len(v); i++ {
+				if _, ok := v[i].Value.(String); !ok {
+					p.errorf(v[i].Location, "unexpected %v, expecting string", TypeName(v[i].Value))
+					return nil
+				}
 			}
+			imp.Path = term
 		}
-		imp.Path = term
-	default:
+	}
+
+	if imp.Path == nil {
 		p.error(p.s.Loc(), "expected path")
 		return nil
 	}
