@@ -56,6 +56,18 @@ func TestPositions(t *testing.T) {
 			wantOffset: 0,
 			wantEnd:    3,
 		},
+		{
+			note:       "invalid number",
+			input:      "0xDEADBEEF",
+			wantOffset: 0,
+			wantEnd:    10,
+		},
+		{
+			note:       "invalid identifier",
+			input:      "0.1e12a1b2c3d",
+			wantOffset: 0,
+			wantEnd:    13,
+		},
 	}
 
 	for _, tc := range tests {
