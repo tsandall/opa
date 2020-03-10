@@ -322,11 +322,21 @@ func ParseRuleFromCallEqExpr(module *Module, lhs, rhs *Term) (*Rule, error) {
 		return nil, fmt.Errorf("must be call")
 	}
 
+	ref, ok := call[0].Value.(Ref)
+	if !ok {
+		return nil, fmt.Errorf("%vs cannot be used in function definition", TypeName(call[0].Value))
+	}
+
+	name, ok := ref[0].Value.(Var)
+	if !ok {
+		return nil, fmt.Errorf("%vs cannot be used in function definition", TypeName(ref[0].Value))
+	}
+
 	rule := &Rule{
 		Location: lhs.Location,
 		Head: &Head{
 			Location: lhs.Location,
-			Name:     call[0].Value.(Ref)[0].Value.(Var),
+			Name:     name,
 			Args:     Args(call[1:]),
 			Value:    rhs,
 		},
