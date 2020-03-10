@@ -249,13 +249,12 @@ func (p *Parser) parseRules() []*Rule {
 	var rule Rule
 	rule.SetLoc(p.s.Loc())
 
-	switch p.s.tok {
-	case tokens.Default:
+	if p.s.tok == tokens.Default {
 		p.scan()
 		rule.Default = true
-	case tokens.Ident:
-		break
-	default:
+	}
+
+	if p.s.tok != tokens.Ident {
 		return nil
 	}
 
