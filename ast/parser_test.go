@@ -154,6 +154,7 @@ func TestVarTerms(t *testing.T) {
 	assertParseError(t, "not keyword", "not")
 	assertParseError(t, `package keyword`, "package")
 	assertParseError(t, "import keyword", "import")
+	assertParseError(t, "import invalid path", "import x.")
 }
 
 func TestRefTerms(t *testing.T) {
