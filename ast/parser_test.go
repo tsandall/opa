@@ -1655,6 +1655,11 @@ data = {"bar": 2} { true }`
 
 	some x`
 
+	arrayTerm := `
+	package a
+	[][0]
+	`
+
 	assertParseModuleError(t, "multiple expressions", multipleExprs)
 	assertParseModuleError(t, "non-equality", nonEquality)
 	assertParseModuleError(t, "non-var name", nonVarName)
@@ -1666,6 +1671,7 @@ data = {"bar": 2} { true }`
 	assertParseModuleError(t, "zero args", zeroArgs)
 	assertParseModuleError(t, "assign to term", assignToTerm)
 	assertParseModuleError(t, "some decl", someDecl)
+	assertParseModuleError(t, "array term", arrayTerm)
 	assertParseModuleError(t, "call in ref partial set", "package test\nf().x {}")
 	assertParseModuleError(t, "call in ref partial object", "package test\nf().x = y {}")
 
@@ -2048,7 +2054,22 @@ func TestParserText(t *testing.T) {
 			}
 		})
 	}
+}
 
+func TestParseFuzzRegressions(t *testing.T) {
+	cases := []string{
+		"12[3]()=4",
+	}
+
+	for i, tc := range cases {
+		t.Run(fmt.Sprintf("case_%d", i), func(t *testing.T) {
+			// Don't care about the return, it just needs to not panic
+			_, _, err := ParseStatements("", tc)
+			if err == nil {
+				_, _ = CompileModules(map[string]string{"": tc})
+			}
+		})
+	}
 }
 
 func assertParseError(t *testing.T, msg string, input string) {

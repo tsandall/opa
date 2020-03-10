@@ -292,7 +292,8 @@ func ParsePartialSetDocRuleFromTerm(module *Module, term *Term) (*Rule, error) {
 		return nil, fmt.Errorf("refs cannot be used for rule")
 	}
 
-	if _, ok := ref[0].Value.(Var); !ok {
+	name, ok := ref[0].Value.(Var)
+	if !ok {
 		return nil, fmt.Errorf("%vs cannot be used in rule head", TypeName(ref[0].Value))
 	}
 
@@ -300,7 +301,7 @@ func ParsePartialSetDocRuleFromTerm(module *Module, term *Term) (*Rule, error) {
 		Location: term.Location,
 		Head: &Head{
 			Location: term.Location,
-			Name:     ref[0].Value.(Var),
+			Name:     name,
 			Key:      ref[1],
 		},
 		Body: NewBody(
