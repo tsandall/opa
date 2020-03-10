@@ -200,6 +200,8 @@ func (s *Scanner) scanNumber() (string, bool) {
 		}
 	}
 
+	valid := true
+
 	if s.curr == '.' {
 		s.next()
 		var found bool
@@ -209,6 +211,7 @@ func (s *Scanner) scanNumber() (string, bool) {
 		}
 		if !found {
 			s.error("expected digit in fraction")
+			valid = false
 		}
 	}
 
@@ -224,6 +227,7 @@ func (s *Scanner) scanNumber() (string, bool) {
 		}
 		if !found {
 			s.error("expected digit in exponent")
+			valid = false
 		}
 	}
 
@@ -231,13 +235,12 @@ func (s *Scanner) scanNumber() (string, bool) {
 	// entire invalid number/identifier.
 	// Example: 0a2b should be a single invalid identifier "0a2b"
 	// rather than a number "0", followed by identifier "a2b".
-	valid := true
-	for isLetter(s.curr) || isDigit(s.curr) {
+	if isLetter(s.curr) {
 		valid = false
-		s.next()
-	}
-	if !valid {
 		s.error("illegal number format")
+		for isLetter(s.curr) || isDigit(s.curr) {
+			s.next()
+		}
 	}
 
 	return string(s.bs[start : s.offset-1]), valid
