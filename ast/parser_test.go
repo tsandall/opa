@@ -1674,6 +1674,7 @@ data = {"bar": 2} { true }`
 	assertParseModuleError(t, "array term", arrayTerm)
 	assertParseModuleError(t, "call in ref partial set", "package test\nf().x {}")
 	assertParseModuleError(t, "call in ref partial object", "package test\nf().x = y {}")
+	assertParseModuleError(t, "number in ref", "package a\n12[3]()=4")
 
 	if _, err := ParseRuleFromExpr(&Module{}, &Expr{
 		Terms: struct{}{},
@@ -2051,22 +2052,6 @@ func TestParserText(t *testing.T) {
 				if result != tc.input {
 					t.Fatalf("expected %q but got: %q", tc.input, result)
 				}
-			}
-		})
-	}
-}
-
-func TestParseFuzzRegressions(t *testing.T) {
-	cases := []string{
-		"12[3]()=4",
-	}
-
-	for i, tc := range cases {
-		t.Run(fmt.Sprintf("case_%d", i), func(t *testing.T) {
-			// Don't care about the return, it just needs to not panic
-			_, _, err := ParseStatements("", tc)
-			if err == nil {
-				_, _ = CompileModules(map[string]string{"": tc})
 			}
 		})
 	}
