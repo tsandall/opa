@@ -198,6 +198,7 @@ func TestObjectWithRelation(t *testing.T) {
 	assertParseOneTerm(t, "relation term value", `{"x": 1+1}`, ObjectTerm(
 		Item(StringTerm("x"), CallTerm(RefTerm(VarTerm("plus")), IntNumberTerm(1), IntNumberTerm(1))),
 	))
+	assertParseError(t, "invalid relation term value", `{"x": 0= }`)
 }
 
 func TestObjectFail(t *testing.T) {
