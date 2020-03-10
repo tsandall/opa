@@ -605,8 +605,10 @@ func (p *Parser) parseExpr() *Expr {
 	}
 
 	if op := p.parseTermOp(tokens.Assign, tokens.Unify); op != nil {
-		rhs := p.parseTermRelation()
-		return NewExpr([]*Term{op, lhs, rhs})
+		if rhs := p.parseTermRelation(); rhs != nil {
+			return NewExpr([]*Term{op, lhs, rhs})
+		}
+		return nil
 	}
 
 	// NOTE(tsandall): the top-level call term is converted to an expr because
