@@ -23,6 +23,11 @@ type Scanner struct {
 	filename string
 }
 
+type Error struct {
+	Pos     Position
+	Message string
+}
+
 type Position struct {
 	Offset int // start offset in bytes
 	End    int // end offset in bytes
@@ -63,16 +68,7 @@ func (s *Scanner) String() string {
 	return fmt.Sprintf("<curr: %q, offset: %d, len: %d>", s.curr, s.offset, len(s.bs))
 }
 
-type Error struct {
-	Pos     Position
-	Message string
-}
-
-func (s *Scanner) Errors() []Error {
-	return s.errors
-}
-
-func (s *Scanner) Scan() (tokens.Token, Position, string) {
+func (s *Scanner) Scan() (tokens.Token, Position, string, []Error) {
 
 	pos := Position{Offset: s.offset - s.width, Row: s.row, Col: s.col}
 	var tok tokens.Token
@@ -85,13 +81,8 @@ func (s *Scanner) Scan() (tokens.Token, Position, string) {
 		lit = s.scanIdentifier()
 		tok = tokens.Keyword(lit)
 	} else if isDecimal(s.curr) {
-		var isNum bool
-		lit, isNum = s.scanNumber()
-		if isNum {
-			tok = tokens.Number
-		} else {
-			tok = tokens.Ident
-		}
+		lit = s.scanNumber()
+		tok = tokens.Number
 	} else {
 		ch := s.curr
 		s.next()
@@ -178,8 +169,10 @@ func (s *Scanner) Scan() (tokens.Token, Position, string) {
 	}
 
 	pos.End = s.offset - s.width
+	errs := s.errors
+	s.errors = nil
 
-	return tok, pos, lit
+	return tok, pos, lit, errs
 }
 
 func (s *Scanner) scanIdentifier() string {
@@ -190,7 +183,7 @@ func (s *Scanner) scanIdentifier() string {
 	return string(s.bs[start : s.offset-1])
 }
 
-func (s *Scanner) scanNumber() (string, bool) {
+func (s *Scanner) scanNumber() string {
 
 	start := s.offset - 1
 
@@ -200,8 +193,6 @@ func (s *Scanner) scanNumber() (string, bool) {
 		}
 	}
 
-	valid := true
-
 	if s.curr == '.' {
 		s.next()
 		var found bool
@@ -210,8 +201,7 @@ func (s *Scanner) scanNumber() (string, bool) {
 			found = true
 		}
 		if !found {
-			s.error("expected digit in fraction")
-			valid = false
+			s.error("expected fraction")
 		}
 	}
 
@@ -226,24 +216,22 @@ func (s *Scanner) scanNumber() (string, bool) {
 			found = true
 		}
 		if !found {
-			s.error("expected digit in exponent")
-			valid = false
+			s.error("expected exponent")
 		}
 	}
 
 	// Scan any digits following the decimals to get the
 	// entire invalid number/identifier.
-	// Example: 0a2b should be a single invalid identifier "0a2b"
+	// Example: 0a2b should be a single invalid number "0a2b"
 	// rather than a number "0", followed by identifier "a2b".
 	if isLetter(s.curr) {
-		valid = false
 		s.error("illegal number format")
 		for isLetter(s.curr) || isDigit(s.curr) {
 			s.next()
 		}
 	}
 
-	return string(s.bs[start : s.offset-1]), valid
+	return string(s.bs[start : s.offset-1])
 }
 
 func (s *Scanner) scanString() string {

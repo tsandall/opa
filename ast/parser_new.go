@@ -816,8 +816,8 @@ func (p *Parser) parseNumber() *Term {
 	}
 
 	// Ensure that the number is valid
-	numberString := prefix + p.s.lit
-	f, ok := new(big.Float).SetString(numberString)
+	s := prefix + p.s.lit
+	f, ok := new(big.Float).SetString(s)
 	if !ok {
 		p.error(p.s.Loc(), "unable to parse number")
 		return nil
@@ -838,7 +838,7 @@ func (p *Parser) parseNumber() *Term {
 
 	// Note: Use the original string, do *not* round trip from
 	// the big.Float as it can cause precision loss.
-	r := NumberTerm(json.Number(numberString)).SetLocation(loc)
+	r := NumberTerm(json.Number(s)).SetLocation(loc)
 	return r
 }
 
@@ -1278,21 +1278,24 @@ func (p *Parser) doScan(skipws bool) {
 		p.s.last = p.s.pos
 	}
 
+	var errs []scanner.Error
 	for {
-		p.s.tok, p.s.pos, p.s.lit = p.s.s.Scan()
-
-		// TODO: Check for errors
-
-		if skipws && p.s.tok == tokens.Whitespace {
-			continue
-		}
+		p.s.tok, p.s.pos, p.s.lit, errs = p.s.s.Scan()
 
 		p.s.loc.Row = p.s.pos.Row
 		p.s.loc.Col = p.s.pos.Col
 		p.s.loc.Text = p.s.Text(p.s.pos.Offset, p.s.pos.End)
 
-		for _, err := range p.s.s.Errors() {
+		for _, err := range errs {
 			p.error(p.s.Loc(), err.Message)
+		}
+
+		if len(errs) > 0 {
+			p.s.tok = tokens.Illegal
+		}
+
+		if skipws && p.s.tok == tokens.Whitespace {
+			continue
 		}
 
 		if p.s.tok != tokens.Comment {
