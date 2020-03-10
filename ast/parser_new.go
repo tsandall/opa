@@ -737,20 +737,18 @@ func (p *Parser) parseTerm() *Term {
 	switch p.s.tok {
 	case tokens.Null:
 		r := NullTerm().SetLocation(p.s.Loc())
-		p.scan()
-		return r
+		// TODO: add tests for finishing terms (all cases below)
+		return p.parseTermFinish(r)
 	case tokens.True:
 		r := BooleanTerm(true).SetLocation(p.s.Loc())
-		p.scan()
-		return r
+		return p.parseTermFinish(r)
 	case tokens.False:
 		r := BooleanTerm(false).SetLocation(p.s.Loc())
-		p.scan()
-		return r
+		return p.parseTermFinish(r)
 	case tokens.Sub, tokens.Dot, tokens.Number:
-		return p.parseNumber()
+		return p.parseTermFinish(p.parseNumber())
 	case tokens.String:
-		return p.parseString()
+		return p.parseTermFinish(p.parseString())
 	case tokens.Ident:
 		return p.parseTermFinish(p.parseTermVar())
 	case tokens.LBrack:
@@ -763,8 +761,7 @@ func (p *Parser) parseTerm() *Term {
 		if r := p.parseTermRelation(); r != nil {
 			if p.s.tok == tokens.RParen {
 				r.Location.Text = p.s.Text(offset, p.s.pos.End)
-				p.scan()
-				return r
+				return p.parseTermFinish(r)
 			}
 			p.error(p.s.Loc(), "non-terminated expression")
 		}
@@ -787,6 +784,7 @@ func (p *Parser) parseTermFinish(head *Term) *Term {
 		p.scan()
 		fallthrough
 	default:
+		//TODO: Check for var
 		if RootDocumentNames.Contains(head) {
 			return RefTerm(head).SetLocation(head.Location)
 		}
@@ -841,7 +839,6 @@ func (p *Parser) parseNumber() *Term {
 	// Note: Use the original string, do *not* round trip from
 	// the big.Float as it can cause precision loss.
 	r := NumberTerm(json.Number(numberString)).SetLocation(loc)
-	p.scan()
 	return r
 }
 
@@ -854,7 +851,6 @@ func (p *Parser) parseString() *Term {
 			return nil
 		}
 		term := StringTerm(s).SetLocation(p.s.Loc())
-		p.scan()
 		return term
 	}
 	return p.parseRawString()
@@ -865,7 +861,6 @@ func (p *Parser) parseRawString() *Term {
 		return nil
 	}
 	term := StringTerm(p.s.lit[1 : len(p.s.lit)-1]).SetLocation(p.s.Loc())
-	p.scan()
 	return term
 }
 
@@ -1285,6 +1280,8 @@ func (p *Parser) doScan(skipws bool) {
 
 	for {
 		p.s.tok, p.s.pos, p.s.lit = p.s.s.Scan()
+
+		// TODO: Check for errors
 
 		if skipws && p.s.tok == tokens.Whitespace {
 			continue
