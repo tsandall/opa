@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"math/big"
 
 	"github.com/open-policy-agent/opa/ast/internal/scanner"
 	"github.com/open-policy-agent/opa/ast/internal/tokens"
@@ -813,7 +814,31 @@ func (p *Parser) parseNumber() *Term {
 			return nil
 		}
 	}
-	r := NumberTerm(json.Number(prefix + p.s.lit)).SetLocation(loc)
+
+	// Ensure that the number is valid
+	numberString := prefix + p.s.lit
+	f, ok := new(big.Float).SetString(numberString)
+	if !ok {
+		p.error(p.s.Loc(), "unable to parse number")
+		return nil
+	}
+
+	// Put limit on size of exponent to prevent non-linear cost of String()
+	// function on big.Float from causing denial of service: https://github.com/golang/go/issues/11068
+	//
+	// n == sign * mantissa * 2^exp
+	// 0.5 <= mantissa < 1.0
+	//
+	// The limit is arbitrary.
+	exp := f.MantExp(nil)
+	if exp > 1e5 || exp < -1e5 {
+		p.error(p.s.Loc(), "number too big")
+		return nil
+	}
+
+	// Note: Use the original string, do *not* round trip from
+	// the big.Float as it can cause precision loss.
+	r := NumberTerm(json.Number(numberString)).SetLocation(loc)
 	p.scan()
 	return r
 }

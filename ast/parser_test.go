@@ -137,6 +137,7 @@ func TestScalarTerms(t *testing.T) {
 	assertParseError(t, "non-number9", "{0e}")
 	assertParseError(t, "non-number9", "{0e.}")
 	assertParseError(t, "non-number10", "{0F}")
+	assertParseError(t, "number too big", "{7e3000000000}")
 }
 
 func TestVarTerms(t *testing.T) {
