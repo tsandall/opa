@@ -133,6 +133,10 @@ func TestScalarTerms(t *testing.T) {
 	assertParseError(t, "non-number5", "6false")
 	assertParseError(t, "non-number6", "6[null, null]")
 	assertParseError(t, "non-number7", "6{\"foo\": \"bar\"}")
+	assertParseError(t, "non-number8", ".0.")
+	assertParseError(t, "non-number9", "{0e}")
+	assertParseError(t, "non-number9", "{0e.}")
+	assertParseError(t, "non-number10", "{0F}")
 }
 
 func TestVarTerms(t *testing.T) {
