@@ -85,8 +85,13 @@ func (s *Scanner) Scan() (tokens.Token, Position, string) {
 		lit = s.scanIdentifier()
 		tok = tokens.Keyword(lit)
 	} else if isDecimal(s.curr) {
-		lit = s.scanNumber()
-		tok = tokens.Number
+		var isNum bool
+		lit, isNum = s.scanNumber()
+		if isNum {
+			tok = tokens.Number
+		} else {
+			tok = tokens.Ident
+		}
 	} else {
 		ch := s.curr
 		s.next()
@@ -185,7 +190,7 @@ func (s *Scanner) scanIdentifier() string {
 	return string(s.bs[start : s.offset-1])
 }
 
-func (s *Scanner) scanNumber() string {
+func (s *Scanner) scanNumber() (string, bool) {
 
 	start := s.offset - 1
 
@@ -222,7 +227,20 @@ func (s *Scanner) scanNumber() string {
 		}
 	}
 
-	return string(s.bs[start : s.offset-1])
+	// Scan any digits following the decimals to get the
+	// entire invalid number/identifier.
+	// Example: 0a2b should be a single invalid identifier "0a2b"
+	// rather than a number "0", followed by identifier "a2b".
+	valid := true
+	for isLetter(s.curr) || isDigit(s.curr) {
+		valid = false
+		s.next()
+	}
+	if !valid {
+		s.error("illegal number format")
+	}
+
+	return string(s.bs[start : s.offset-1]), valid
 }
 
 func (s *Scanner) scanString() string {
