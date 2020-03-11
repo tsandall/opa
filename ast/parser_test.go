@@ -2066,22 +2066,17 @@ func assertParseError(t *testing.T, msg string, input string) {
 }
 
 func assertParseErrorContains(t *testing.T, msg string, input string, expected string) {
+	t.Helper()
 	assertParseErrorFunc(t, msg, input, func(result string) {
+		t.Helper()
 		if !strings.Contains(result, expected) {
-			t.Errorf("Error on test %s: expected parse error to contain %v but got: %v", msg, expected, result)
-		}
-	})
-}
-
-func assertParseErrorEquals(t *testing.T, msg string, input string, expected string) {
-	assertParseErrorFunc(t, msg, input, func(result string) {
-		if result != expected {
-			t.Errorf("Error on test %s: expected parse error to equal %v but got: %v", msg, expected, result)
+			t.Errorf("Error on test \"%s\": expected parse error to contain:\n\n%v\n\nbut got:\n\n%v", msg, expected, result)
 		}
 	})
 }
 
 func assertParseErrorFunc(t *testing.T, msg string, input string, f func(string)) {
+	t.Helper()
 	p, err := ParseStatement(input)
 	if err == nil {
 		t.Errorf("Error on test %s: expected parse error: %v (parsed)", msg, p)
@@ -2095,10 +2090,12 @@ func assertParseErrorFunc(t *testing.T, msg string, input string, f func(string)
 }
 
 func assertParseImport(t *testing.T, msg string, input string, correct *Import) {
+	t.Helper()
 	assertParseOne(t, msg, input, func(parsed interface{}) {
+		t.Helper()
 		imp := parsed.(*Import)
 		if !imp.Equal(correct) {
-			t.Errorf("Error on test %s: imports not equal: %v (parsed), %v (correct)", msg, imp, correct)
+			t.Errorf("Error on test \"%s\": imports not equal: %v (parsed), %v (correct)", msg, imp, correct)
 		}
 	})
 }
@@ -2107,7 +2104,7 @@ func assertParseModule(t *testing.T, msg string, input string, correct *Module) 
 
 	m, err := ParseModule("", input)
 	if err != nil {
-		t.Errorf("Error on test %s: parse error on %s: %s", msg, input, err)
+		t.Errorf("Error on test \"%s\": parse error on %s: %s", msg, input, err)
 		return
 	}
 
@@ -2120,7 +2117,7 @@ func assertParseModule(t *testing.T, msg string, input string, correct *Module) 
 func assertParseModuleError(t *testing.T, msg, input string) {
 	m, err := ParseModule("", input)
 	if err == nil {
-		t.Errorf("Error on test %v: expected parse error: %v (parsed)", msg, m)
+		t.Errorf("Error on test \"%s\": expected parse error: %v (parsed)", msg, m)
 	}
 }
 
@@ -2128,7 +2125,7 @@ func assertParsePackage(t *testing.T, msg string, input string, correct *Package
 	assertParseOne(t, msg, input, func(parsed interface{}) {
 		pkg := parsed.(*Package)
 		if !pkg.Equal(correct) {
-			t.Errorf("Error on test %s: packages not equal: %v (parsed), %v (correct)", msg, pkg, correct)
+			t.Errorf("Error on test \"%s\": packages not equal: %v (parsed), %v (correct)", msg, pkg, correct)
 		}
 	})
 }
@@ -2137,7 +2134,7 @@ func assertParseOne(t *testing.T, msg string, input string, correct func(interfa
 	t.Helper()
 	p, err := ParseStatement(input)
 	if err != nil {
-		t.Errorf("Error on test %s: parse error on %s: %s", msg, input, err)
+		t.Errorf("Error on test \"%s\": parse error on %s: %s", msg, input, err)
 		return
 	}
 	correct(p)
@@ -2150,7 +2147,7 @@ func assertParseOneBody(t *testing.T, msg string, input string, correct Body) {
 		t.Fatal(err)
 	}
 	if !body.Equal(correct) {
-		t.Fatalf("Error on test %s: bodies not equal:\n%v (parsed)\n%v (correct)", msg, body, correct)
+		t.Fatalf("Error on test \"%s\": bodies not equal:\n%v (parsed)\n%v (correct)", msg, body, correct)
 	}
 }
 
@@ -2158,12 +2155,12 @@ func assertParseOneExpr(t *testing.T, msg string, input string, correct *Expr) {
 	assertParseOne(t, msg, input, func(parsed interface{}) {
 		body := parsed.(Body)
 		if len(body) != 1 {
-			t.Errorf("Error on test %s: parser returned multiple expressions: %v", msg, body)
+			t.Errorf("Error on test \"%s\": parser returned multiple expressions: %v", msg, body)
 			return
 		}
 		expr := body[0]
 		if !expr.Equal(correct) {
-			t.Errorf("Error on test %s: expressions not equal:\n%v (parsed)\n%v (correct)", msg, expr, correct)
+			t.Errorf("Error on test \"%s\": expressions not equal:\n%v (parsed)\n%v (correct)", msg, expr, correct)
 		}
 	})
 }
@@ -2187,7 +2184,7 @@ func assertParseRule(t *testing.T, msg string, input string, correct *Rule) {
 		t.Helper()
 		rule := parsed.(*Rule)
 		if !rule.Equal(correct) {
-			t.Errorf("Error on test %s: rules not equal: %v (parsed), %v (correct)", msg, rule, correct)
+			t.Errorf("Error on test \"%s\": rules not equal: %v (parsed), %v (correct)", msg, rule, correct)
 		}
 	})
 }
