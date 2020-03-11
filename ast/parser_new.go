@@ -421,8 +421,7 @@ func (p *Parser) parseHead(defaultRule bool) *Head {
 		p.scan()
 		head.Key = p.parseTermRelation()
 		if head.Key == nil {
-			// TODO(tsandall): replace 'p' with actual rule name below.
-			p.illegal("expected rule key term (e.g., p[<VALUE>] { ... })")
+			p.illegal("expected rule key term (e.g., %s[<VALUE>] { ... })", head.Name)
 		}
 		if p.s.tok != tokens.RBrack {
 			p.illegal("non-terminated rule key")
@@ -434,7 +433,7 @@ func (p *Parser) parseHead(defaultRule bool) *Head {
 		p.scan()
 		head.Value = p.parseTermRelation()
 		if head.Value == nil {
-			p.illegal("expected rule value term (e.g., p := <VALUE> { ... })")
+			p.illegal("expected rule key term (e.g., %s[<VALUE>] { ... })", head.Name)
 		}
 	} else if p.s.tok == tokens.Assign {
 
@@ -453,7 +452,7 @@ func (p *Parser) parseHead(defaultRule bool) *Head {
 		head.Assign = true
 		head.Value = p.parseTermRelation()
 		if head.Value == nil {
-			p.illegal("expected rule value term (e.g., p := <VALUE> { ... })")
+			p.illegal("expected rule value term (e.g., %s := <VALUE> { ... })", head.Name)
 		}
 	}
 
