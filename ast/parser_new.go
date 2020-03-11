@@ -910,6 +910,13 @@ func (p *Parser) parseRef(head *Term, offset int) (term *Term) {
 		p.setLoc(term, loc, offset, end)
 	}()
 
+	switch h := head.Value.(type) {
+	case Var, Array, Object, Set, *ArrayComprehension, *ObjectComprehension, *SetComprehension, Call:
+		// ok
+	default:
+		p.errorf(loc, "ref cannot contain %v", TypeName(h))
+	}
+
 	ref := []*Term{head}
 
 	for {
@@ -944,7 +951,6 @@ func (p *Parser) parseRef(head *Term, offset int) (term *Term) {
 					return nil
 				}
 				ref = append(ref, term)
-				// TODO: add test case for this like we did for parseCall
 				p.scanWS()
 			} else {
 				return nil
