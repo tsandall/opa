@@ -2088,7 +2088,7 @@ func assertParseErrorFunc(t *testing.T, msg string, input string, f func(string)
 	t.Helper()
 	p, err := ParseStatement(input)
 	if err == nil {
-		t.Errorf("Error on test %s: expected parse error: %v (parsed)", msg, p)
+		t.Errorf("Error on test \"%s\": expected parse error but parsed successfully:\n\n%v\n\n(parsed)", msg, p)
 		return
 	}
 	result := err.Error()
