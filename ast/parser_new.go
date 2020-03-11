@@ -1355,6 +1355,11 @@ func (p *Parser) setLoc(term *Term, loc *location.Location, offset, end int) *Te
 }
 
 func (p *Parser) validateDefaultRuleValue(rule *Rule) bool {
+	if rule.Head.Value == nil {
+		p.error(rule.Loc(), fmt.Sprintf("default rule must have a value"))
+		return false
+	}
+
 	valid := true
 	vis := NewGenericVisitor(func(x interface{}) bool {
 		switch x.(type) {
