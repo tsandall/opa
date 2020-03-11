@@ -742,41 +742,41 @@ func (p *Parser) parseTermFactor(lhs *Term, offset int) *Term {
 }
 
 func (p *Parser) parseTerm() *Term {
+	var term *Term
 	switch p.s.tok {
 	case tokens.Null:
-		r := NullTerm().SetLocation(p.s.Loc())
-		// TODO: add tests for finishing terms (all cases below)
-		return p.parseTermFinish(r)
+		term = NullTerm().SetLocation(p.s.Loc())
 	case tokens.True:
-		r := BooleanTerm(true).SetLocation(p.s.Loc())
-		return p.parseTermFinish(r)
+		term = BooleanTerm(true).SetLocation(p.s.Loc())
 	case tokens.False:
-		r := BooleanTerm(false).SetLocation(p.s.Loc())
-		return p.parseTermFinish(r)
+		term = BooleanTerm(false).SetLocation(p.s.Loc())
 	case tokens.Sub, tokens.Dot, tokens.Number:
-		return p.parseTermFinish(p.parseNumber())
+		term = p.parseNumber()
 	case tokens.String:
-		return p.parseTermFinish(p.parseString())
+		term = p.parseString()
 	case tokens.Ident:
-		return p.parseTermFinish(p.parseTermVar())
+		term = p.parseTermVar()
 	case tokens.LBrack:
-		return p.parseTermFinish(p.parseArray())
+		term = p.parseArray()
 	case tokens.LBrace:
-		return p.parseTermFinish(p.parseSetOrObject())
+		term = p.parseSetOrObject()
 	case tokens.LParen:
 		offset := p.s.pos.Offset
 		p.scan()
 		if r := p.parseTermRelation(); r != nil {
 			if p.s.tok == tokens.RParen {
 				r.Location.Text = p.s.Text(offset, p.s.pos.End)
-				return p.parseTermFinish(r)
+				term = r
+			} else {
+				p.error(p.s.Loc(), "non-terminated expression")
 			}
-			p.error(p.s.Loc(), "non-terminated expression")
 		}
+	default:
+		p.illegal("expected term")
 		return nil
 	}
-	p.illegal("expected term")
-	return nil
+
+	return p.parseTermFinish(term)
 }
 
 func (p *Parser) parseTermFinish(head *Term) *Term {

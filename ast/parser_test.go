@@ -179,8 +179,10 @@ func TestRefTerms(t *testing.T) {
 	assertParseError(t, "invalid composite operand", "foo[1,2]")
 	assertParseError(t, "invalid call", "bar(..")
 	assertParseError(t, "invalid ref", "bar[..")
-	assertParseError(t, "invalid ref head type 1", "0[0]")
-	assertParseError(t, "invalid ref head type 2", "true[0]")
+	assertParseError(t, "invalid ref head type number", "0[0]")
+	assertParseError(t, "invalid ref head type boolean", "true[0]")
+	assertParseError(t, "invalid ref head type string", `"foo"[0]`)
+	assertParseError(t, "invalid ref head type null", `null[0]`)
 }
 
 func TestObjectWithScalars(t *testing.T) {
