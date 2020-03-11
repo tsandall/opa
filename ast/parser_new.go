@@ -433,7 +433,7 @@ func (p *Parser) parseHead(defaultRule bool) *Head {
 		p.scan()
 		head.Value = p.parseTermRelation()
 		if head.Value == nil {
-			p.illegal("expected rule key term (e.g., %s[<VALUE>] { ... })", head.Name)
+			p.illegal("expected rule value term (e.g., %s[<VALUE>] { ... })", head.Name)
 		}
 	} else if p.s.tok == tokens.Assign {
 
