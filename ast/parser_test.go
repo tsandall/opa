@@ -876,6 +876,7 @@ func TestPackage(t *testing.T) {
 	assertParseError(t, "non-string value", "package foo.bar[42].baz")
 	assertParseError(t, "invalid term", "package 42")
 	assertParseError(t, "scanner error", "package foo.")
+	assertParseError(t, "non-string first value", "package e().s")
 }
 
 func TestImport(t *testing.T) {
