@@ -162,7 +162,12 @@ func (p *Parser) parsePackage() *Package {
 		case Ref:
 			pkg.Path = make(Ref, len(v)+1)
 			pkg.Path[0] = DefaultRootDocument.Copy().SetLocation(v[0].Location)
-			pkg.Path[1] = StringTerm(string(v[0].Value.(Var))).SetLocation(v[0].Location)
+			first, ok := v[0].Value.(Var)
+			if !ok {
+				p.errorf(v[0].Location, "unexpected %v, expecting var", TypeName(v[0].Value))
+				return nil
+			}
+			pkg.Path[1] = StringTerm(string(first)).SetLocation(v[0].Location)
 			for i := 2; i < len(pkg.Path); i++ {
 				switch v[i-1].Value.(type) {
 				case String:
