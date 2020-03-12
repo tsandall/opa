@@ -1109,7 +1109,7 @@ func (p *Parser) parseSet(s *state, head *Term) *Term {
 
 func (p *Parser) parseObject(k *Term) *Term {
 	// NOTE(tsandall): Assumption: this function is called after parsing the key
-	// of the head elemenet and then receiving a colon token from the scanner.
+	// of the head element and then receiving a colon token from the scanner.
 	// Advance beyond the colon and attempt to parse an object.
 	p.scan()
 
