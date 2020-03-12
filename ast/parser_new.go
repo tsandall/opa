@@ -1237,12 +1237,14 @@ func (p *Parser) parseTermVar() *Term {
 
 	s := p.s.lit
 
-	// TODO(tsandall): refactor to use constant defined elsewhere
-	if s == "_" {
-		s = p.genwildcard()
+	term := VarTerm(s).SetLocation(p.s.Loc())
+
+	// Update wildcard values with unique identifiers
+	if term.Equal(Wildcard) {
+		term.Value = Var(p.genwildcard())
 	}
 
-	return VarTerm(s).SetLocation(p.s.Loc())
+	return term
 }
 
 func (p *Parser) genwildcard() string {
