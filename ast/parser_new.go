@@ -15,7 +15,9 @@ import (
 	"github.com/open-policy-agent/opa/ast/location"
 )
 
-// NOTE(tsandall): Explain why state is organized this way. Shallow copying.
+// Note: This state is kept isolated from the parser so that we
+// can do efficient shallow copies of these values when doing a
+// save() and restore().
 type state struct {
 	s        *scanner.Scanner
 	last     scanner.Position
