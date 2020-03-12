@@ -792,8 +792,7 @@ func (p *Parser) parseTermFinish(head *Term) *Term {
 		p.scan()
 		fallthrough
 	default:
-		//TODO: Check for var
-		if RootDocumentNames.Contains(head) {
+		if _, ok := head.Value.(Var); ok && RootDocumentNames.Contains(head) {
 			return RefTerm(head).SetLocation(head.Location)
 		}
 		return head
