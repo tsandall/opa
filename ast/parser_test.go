@@ -1135,6 +1135,13 @@ func TestRule(t *testing.T) {
 		},
 		Body: NewBody(NewExpr(BooleanTerm(true))),
 	})
+	assertParseRule(t, "empty arguments", `f() { x := 1 }`, &Rule{
+		Head: &Head{
+			Name:  "f",
+			Value: BooleanTerm(true),
+		},
+		Body: MustParseBody(`x := 1`),
+	})
 }
 
 func TestRuleElseKeyword(t *testing.T) {

@@ -422,12 +422,11 @@ func (p *Parser) parseHead(defaultRule bool) *Head {
 
 	if p.s.tok == tokens.LParen {
 		p.scan()
-		if p.s.tok == tokens.RParen {
-			return nil
-		}
-		head.Args = p.parseTermList(tokens.RParen, nil)
-		if head.Args == nil {
-			return nil
+		if p.s.tok != tokens.RParen {
+			head.Args = p.parseTermList(tokens.RParen, nil)
+			if head.Args == nil {
+				return nil
+			}
 		}
 		p.scan()
 	}
