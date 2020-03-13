@@ -993,6 +993,16 @@ func (p *Parser) parseArray() (term *Term) {
 		return ArrayTerm()
 	}
 
+	possibleComprehension := true
+
+	// Skip leading commas, eg [, x, y]
+	// Supported for backwards compatibility. In the future
+	// we should make this a parse error.
+	if p.s.tok == tokens.Comma {
+		possibleComprehension = false
+		p.scan()
+	}
+
 	s := p.save()
 
 	// NOTE(tsandall): The parser cannot attempt a relational term here because
@@ -1018,13 +1028,17 @@ func (p *Parser) parseArray() (term *Term) {
 		}
 		return nil
 	case tokens.Or:
-		p.scan()
-		if body := p.parseBody(tokens.RBrack); body != nil {
-			return ArrayComprehensionTerm(head, body)
+		if possibleComprehension {
+			// Try to parse as if it is an array comprehension
+			p.scan()
+			if body := p.parseBody(tokens.RBrack); body != nil {
+				return ArrayComprehensionTerm(head, body)
+			}
+			if p.s.tok != tokens.Comma {
+				return nil
+			}
 		}
-		if p.s.tok != tokens.Comma {
-			return nil
-		}
+		// fall back to parsing as a normal array definition
 		fallthrough
 	default:
 		p.restore(s)
@@ -1050,7 +1064,23 @@ func (p *Parser) parseSetOrObject() (term *Term) {
 		return ObjectTerm()
 	}
 
+	potentialComprehension := true
+
+	// Skip leading commas, eg {, x, y}
+	// Supported for backwards compatibility. In the future
+	// we should make this a parse error.
+	if p.s.tok == tokens.Comma {
+		potentialComprehension = false
+		p.scan()
+	}
+
 	s := p.save()
+
+	// Try parsing just a single term first to give comprehensions higher
+	// priority to "or" calls in ambiguous situations. Eg: { a | b }
+	// will be a set comprehension.
+	//
+	// Note: We don't know yet if it is a set or object being defined.
 	head := p.parseTerm()
 
 	if head == nil {
@@ -1058,10 +1088,14 @@ func (p *Parser) parseSetOrObject() (term *Term) {
 	}
 
 	switch p.s.tok {
-	case tokens.Or, tokens.RBrace, tokens.Comma:
-		return p.parseSet(s, head)
+	case tokens.Or:
+		if potentialComprehension {
+			return p.parseSet(s, head, potentialComprehension)
+		}
+	case tokens.RBrace, tokens.Comma:
+		return p.parseSet(s, head, potentialComprehension)
 	case tokens.Colon:
-		return p.parseObject(head)
+		return p.parseObject(head, potentialComprehension)
 	}
 
 	p.restore(s)
@@ -1071,18 +1105,11 @@ func (p *Parser) parseSetOrObject() (term *Term) {
 	}
 
 	switch p.s.tok {
-	case tokens.RBrace, tokens.Comma, tokens.Or:
-		return p.parseSet(s, head)
+	case tokens.RBrace, tokens.Comma:
+		return p.parseSet(s, head, false)
 	case tokens.Colon:
-		p.scan()
-		if val := p.parseTermRelation(); val != nil {
-			switch p.s.tok {
-			case tokens.RBrace, tokens.Comma, tokens.Or:
-				return p.parseObjectFinish(head, val)
-			default:
-				p.illegal("non-terminated object")
-			}
-		}
+		// It still might be an object comprehension, eg { a+1: b | ... }
+		return p.parseObject(head, potentialComprehension)
 	default:
 		p.illegal("non-terminated set")
 	}
@@ -1090,7 +1117,7 @@ func (p *Parser) parseSetOrObject() (term *Term) {
 	return nil
 }
 
-func (p *Parser) parseSet(s *state, head *Term) *Term {
+func (p *Parser) parseSet(s *state, head *Term, potentialComprehension bool) *Term {
 	switch p.s.tok {
 	case tokens.RBrace:
 		return SetTerm(head)
@@ -1101,13 +1128,17 @@ func (p *Parser) parseSet(s *state, head *Term) *Term {
 		}
 		return nil
 	case tokens.Or:
-		p.scan()
-		if body := p.parseBody(tokens.RBrace); body != nil {
-			return SetComprehensionTerm(head, body)
+		if potentialComprehension {
+			// Try to parse as if it is a set comprehension
+			p.scan()
+			if body := p.parseBody(tokens.RBrace); body != nil {
+				return SetComprehensionTerm(head, body)
+			}
+			if p.s.tok != tokens.Comma {
+				return nil
+			}
 		}
-		if p.s.tok != tokens.Comma {
-			return nil
-		}
+		// Fall back to parsing as normal set definition
 		p.restore(s)
 		if terms := p.parseTermList(tokens.RBrace, nil); terms != nil {
 			return SetTerm(terms...)
@@ -1117,7 +1148,7 @@ func (p *Parser) parseSet(s *state, head *Term) *Term {
 	return nil
 }
 
-func (p *Parser) parseObject(k *Term) *Term {
+func (p *Parser) parseObject(k *Term, potentialComprehension bool) *Term {
 	// NOTE(tsandall): Assumption: this function is called after parsing the key
 	// of the head element and then receiving a colon token from the scanner.
 	// Advance beyond the colon and attempt to parse an object.
@@ -1132,8 +1163,10 @@ func (p *Parser) parseObject(k *Term) *Term {
 
 	switch p.s.tok {
 	case tokens.RBrace, tokens.Comma, tokens.Or:
-		if term := p.parseObjectFinish(k, v); term != nil {
-			return term
+		if potentialComprehension {
+			if term := p.parseObjectFinish(k, v, true); term != nil {
+				return term
+			}
 		}
 	}
 
@@ -1145,7 +1178,7 @@ func (p *Parser) parseObject(k *Term) *Term {
 
 	switch p.s.tok {
 	case tokens.Comma, tokens.RBrace:
-		return p.parseObjectFinish(k, v)
+		return p.parseObjectFinish(k, v, false)
 	default:
 		p.illegal("non-terminated object")
 	}
@@ -1153,14 +1186,18 @@ func (p *Parser) parseObject(k *Term) *Term {
 	return nil
 }
 
-func (p *Parser) parseObjectFinish(key, val *Term) *Term {
+func (p *Parser) parseObjectFinish(key, val *Term, potentialComprehension bool) *Term {
 	switch p.s.tok {
 	case tokens.RBrace:
 		return ObjectTerm([2]*Term{key, val})
 	case tokens.Or:
-		p.scan()
-		if body := p.parseBody(tokens.RBrace); body != nil {
-			return ObjectComprehensionTerm(key, val, body)
+		if potentialComprehension {
+			p.scan()
+			if body := p.parseBody(tokens.RBrace); body != nil {
+				return ObjectComprehensionTerm(key, val, body)
+			}
+		} else {
+			p.illegal("non-terminated object")
 		}
 	case tokens.Comma:
 		p.scan()

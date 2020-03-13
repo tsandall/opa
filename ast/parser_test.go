@@ -193,12 +193,15 @@ func TestObjectWithScalars(t *testing.T) {
 	assertParseOneTerm(t, "number key", "{8: 7, \"def\": null}", ObjectTerm(Item(IntNumberTerm(8), IntNumberTerm(7)), Item(StringTerm("def"), NullTerm())))
 	assertParseOneTerm(t, "number key 2", "{8.5: 7, \"def\": null}", ObjectTerm(Item(FloatNumberTerm(8.5), IntNumberTerm(7)), Item(StringTerm("def"), NullTerm())))
 	assertParseOneTerm(t, "bool key", "{true: false}", ObjectTerm(Item(BooleanTerm(true), BooleanTerm(false))))
+	assertParseOneTerm(t, "trailing comma", `{"a": "bar", "b": 64, }`, ObjectTerm(Item(StringTerm("a"), StringTerm("bar")), Item(StringTerm("b"), IntNumberTerm(64))))
+	assertParseOneTerm(t, "leading comma", `{, "a": "bar", "b": 64 }`, ObjectTerm(Item(StringTerm("a"), StringTerm("bar")), Item(StringTerm("b"), IntNumberTerm(64))))
+	assertParseOneTerm(t, "leading comma not comprehension", `{, 1 | 1: "bar"}`, ObjectTerm(Item(CallTerm(RefTerm(VarTerm("or")), NumberTerm("1"), NumberTerm("1")), StringTerm("bar"))))
 }
 
 func TestObjectWithVars(t *testing.T) {
 	assertParseOneTerm(t, "var keys", "{foo: \"bar\", bar: 64}", ObjectTerm(Item(VarTerm("foo"), StringTerm("bar")), Item(VarTerm("bar"), IntNumberTerm(64))))
 	assertParseOneTerm(t, "nested var keys", "{baz: {foo: \"bar\", bar: qux}}", ObjectTerm(Item(VarTerm("baz"), ObjectTerm(Item(VarTerm("foo"), StringTerm("bar")), Item(VarTerm("bar"), VarTerm("qux"))))))
-	assertParseOneTerm(t, "trailing comma", "{foo: \"bar\", bar: 64, }", ObjectTerm(Item(VarTerm("foo"), StringTerm("bar")), Item(VarTerm("bar"), IntNumberTerm(64))))
+	assertParseOneTerm(t, "ambiguous or", `{ a: b+c | d }`, ObjectTerm(Item(VarTerm("a"), CallTerm(RefTerm(VarTerm("or")), CallTerm(RefTerm(VarTerm("plus")), VarTerm("b"), VarTerm("c")), VarTerm("d")))))
 }
 
 func TestObjectWithRelation(t *testing.T) {
@@ -215,6 +218,9 @@ func TestObjectFail(t *testing.T) {
 	assertParseError(t, "non-terminated 4", "{foo: bar, baz: [], ")
 	assertParseError(t, "missing separator", "{foo: bar baz: []}")
 	assertParseError(t, "missing start", "foo: bar, baz: [], qux: corge}")
+	assertParseError(t, "double comma", "{a:1,,b:2}")
+	assertParseError(t, "leading double comma", "{,,a:1}")
+	assertParseError(t, "trailing double comma", "{a:1,,}")
 }
 
 func TestArrayWithScalars(t *testing.T) {
@@ -224,6 +230,9 @@ func TestArrayWithScalars(t *testing.T) {
 	assertParseOneTerm(t, "mixed", "[null, true, 42]", ArrayTerm(NullTerm(), BooleanTerm(true), IntNumberTerm(42)))
 	assertParseOneTerm(t, "trailing comma - one element", "[null, ]", ArrayTerm(NullTerm()))
 	assertParseOneTerm(t, "trailing comma", "[null, true, ]", ArrayTerm(NullTerm(), BooleanTerm(true)))
+	assertParseOneTerm(t, "leading comma", "[, null, true]", ArrayTerm(NullTerm(), BooleanTerm(true)))
+	assertParseOneTerm(t, "leading comma not comprehension", "[, 1 | 1]", ArrayTerm(CallTerm(RefTerm(VarTerm("or")), NumberTerm("1"), NumberTerm("1"))))
+	assertParseOneTerm(t, "ambiguous or", "[ 1 + 2 | 3 ]", ArrayTerm(CallTerm(RefTerm(VarTerm("or")), CallTerm(RefTerm(VarTerm("plus")), NumberTerm("1"), NumberTerm("2")), NumberTerm("3"))))
 }
 
 func TestArrayWithVars(t *testing.T) {
@@ -237,6 +246,9 @@ func TestArrayFail(t *testing.T) {
 	assertParseError(t, "missing separator", "[foo bar]")
 	assertParseError(t, "missing start", "foo, bar, baz]")
 	assertParseError(t, "bad term", "[!!!]")
+	assertParseError(t, "double comma", "[a,,b]")
+	assertParseError(t, "leading double comma", "[,,a]")
+	assertParseError(t, "trailing double comma", "[a,,]")
 }
 
 func TestSetWithScalars(t *testing.T) {
@@ -245,6 +257,9 @@ func TestSetWithScalars(t *testing.T) {
 	assertParseOneTerm(t, "string", "{\"foo\", \"bar\"}", SetTerm(StringTerm("foo"), StringTerm("bar")))
 	assertParseOneTerm(t, "mixed", "{null, true, 42}", SetTerm(NullTerm(), BooleanTerm(true), IntNumberTerm(42)))
 	assertParseOneTerm(t, "trailing comma", "{null, true,}", SetTerm(NullTerm(), BooleanTerm(true)))
+	assertParseOneTerm(t, "leading comma", "{, null, true}", SetTerm(NullTerm(), BooleanTerm(true)))
+	assertParseOneTerm(t, "leading comma not comprehension", "{, 1 | 1}", SetTerm(CallTerm(RefTerm(VarTerm("or")), NumberTerm("1"), NumberTerm("1"))))
+	assertParseOneTerm(t, "ambiguous or", "{ 1 + 2 | 3}", SetTerm(CallTerm(RefTerm(VarTerm("or")), CallTerm(RefTerm(VarTerm("plus")), NumberTerm("1"), NumberTerm("2")), NumberTerm("3"))))
 }
 
 func TestSetWithVars(t *testing.T) {
@@ -259,6 +274,9 @@ func TestSetFail(t *testing.T) {
 	assertParseError(t, "missing separator", "{foo bar}")
 	assertParseError(t, "missing start", "foo, bar, baz}")
 	assertParseError(t, "bad term", "{!!!}")
+	assertParseError(t, "double comma", "{a,,b}")
+	assertParseError(t, "leading double comma", "{,,a}")
+	assertParseError(t, "trailing double comma", "{a,,}")
 }
 
 func TestEmptyComposites(t *testing.T) {
@@ -281,9 +299,8 @@ func TestCompositesWithRefs(t *testing.T) {
 
 func TestArrayComprehensions(t *testing.T) {
 
-	input := `[{"x": [a[i] | xs = [{"a": ["baz", j]} | q[p]; p.a != "bar"; j = "foo"]; xs[j].a[k] = "foo"]}]`
-
-	expected := ArrayTerm(
+	nestedTerm := `[{"x": [a[i] | xs = [{"a": ["baz", j]} | q[p]; p.a != "bar"; j = "foo"]; xs[j].a[k] = "foo"]}]`
+	nestedExpected := ArrayTerm(
 		ObjectTerm(Item(
 			StringTerm("x"),
 			ArrayComprehensionTerm(
@@ -308,14 +325,16 @@ func TestArrayComprehensions(t *testing.T) {
 			),
 		)),
 	)
-
-	assertParseOneTerm(t, "nested", input, expected)
+	assertParseOneTerm(t, "nested", nestedTerm, nestedExpected)
+	assertParseOneTerm(t, "ambiguous or", "[ a | b ]", ArrayComprehensionTerm(
+		VarTerm("a"),
+		MustParseBody("b"),
+	))
 }
 
 func TestObjectComprehensions(t *testing.T) {
-	input := `[{"x": {a[i]: b[i] | xs = {"foo":{"a": ["baz", j]} | q[p]; p.a != "bar"; j = "foo"}; xs[j].a[k] = "foo"}}]`
-
-	expected := ArrayTerm(
+	nestedTerm := `[{"x": {a[i]: b[i] | xs = {"foo":{"a": ["baz", j]} | q[p]; p.a != "bar"; j = "foo"}; xs[j].a[k] = "foo"}}]`
+	nestedExpected := ArrayTerm(
 		ObjectTerm(Item(
 			StringTerm("x"),
 			ObjectComprehensionTerm(
@@ -342,8 +361,12 @@ func TestObjectComprehensions(t *testing.T) {
 			),
 		)),
 	)
-
-	assertParseOneTerm(t, "nested", input, expected)
+	assertParseOneTerm(t, "nested", nestedTerm, nestedExpected)
+	assertParseOneTerm(t, "ambiguous or", "{ 1+2: 3 | 4}", ObjectComprehensionTerm(
+		CallTerm(RefTerm(VarTerm("plus")), NumberTerm("1"), NumberTerm("2")),
+		NumberTerm("3"),
+		MustParseBody("4"),
+	))
 }
 
 func TestObjectComprehensionError(t *testing.T) {
@@ -351,9 +374,8 @@ func TestObjectComprehensionError(t *testing.T) {
 }
 
 func TestSetComprehensions(t *testing.T) {
-	input := `[{"x": {a[i] | xs = {{"a": ["baz", j]} | q[p]; p.a != "bar"; j = "foo"}; xs[j].a[k] = "foo"}}]`
-
-	expected := ArrayTerm(
+	nestedTerm := `[{"x": {a[i] | xs = {{"a": ["baz", j]} | q[p]; p.a != "bar"; j = "foo"}; xs[j].a[k] = "foo"}}]`
+	nestedExpected := ArrayTerm(
 		ObjectTerm(Item(
 			StringTerm("x"),
 			SetComprehensionTerm(
@@ -379,7 +401,11 @@ func TestSetComprehensions(t *testing.T) {
 		)),
 	)
 
-	assertParseOneTerm(t, "nested", input, expected)
+	assertParseOneTerm(t, "nested", nestedTerm, nestedExpected)
+	assertParseOneTerm(t, "ambiguous or", "{ a | b }", SetComprehensionTerm(
+		VarTerm("a"),
+		MustParseBody("b"),
+	))
 }
 
 func TestSetComprehensionError(t *testing.T) {
@@ -2170,7 +2196,9 @@ func assertParseOneBody(t *testing.T, msg string, input string, correct Body) {
 }
 
 func assertParseOneExpr(t *testing.T, msg string, input string, correct *Expr) {
+	t.Helper()
 	assertParseOne(t, msg, input, func(parsed interface{}) {
+		t.Helper()
 		body := parsed.(Body)
 		if len(body) != 1 {
 			t.Errorf("Error on test \"%s\": parser returned multiple expressions: %v", msg, body)
@@ -2189,10 +2217,12 @@ func assertParseOneExprNegated(t *testing.T, msg string, input string, correct *
 }
 
 func assertParseOneTerm(t *testing.T, msg string, input string, correct *Term) {
+	t.Helper()
 	assertParseOneExpr(t, msg, input, &Expr{Terms: correct})
 }
 
 func assertParseOneTermNegated(t *testing.T, msg string, input string, correct *Term) {
+	t.Helper()
 	assertParseOneExprNegated(t, msg, input, &Expr{Terms: correct})
 }
 
