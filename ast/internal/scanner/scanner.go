@@ -16,6 +16,8 @@ import (
 
 const bom = 0xFEFF
 
+// Scanner is used to tokenize an input stream of
+// Rego source code.
 type Scanner struct {
 	offset   int
 	row      int
@@ -27,11 +29,13 @@ type Scanner struct {
 	filename string
 }
 
+// Error represents a scanner error.
 type Error struct {
 	Pos     Position
 	Message string
 }
 
+// Position represents a point in the scanned source code.
 type Position struct {
 	Offset int // start offset in bytes
 	End    int // end offset in bytes
@@ -39,6 +43,8 @@ type Position struct {
 	Col    int // column number computed in bytes
 }
 
+// New returns an initialized scanner that will scan
+// through the source code provided by the io.Reader.
 func New(r io.Reader) (*Scanner, error) {
 
 	bs, err := ioutil.ReadAll(r)
@@ -64,14 +70,22 @@ func New(r io.Reader) (*Scanner, error) {
 	return s, nil
 }
 
+// Bytes returns the raw bytes for the full source
+// which the scanner has read in.
 func (s *Scanner) Bytes() []byte {
 	return s.bs
 }
 
+// String returns a human readable string of the current scanner state.
 func (s *Scanner) String() string {
 	return fmt.Sprintf("<curr: %q, offset: %d, len: %d>", s.curr, s.offset, len(s.bs))
 }
 
+// Scan will increment the scanners position in the source
+// code until the next token is found. The token, starting position
+// of the token, string literal, and any errors encountered are
+// returned. A token will always be returned, the caller must check
+// for any errors before using the other values.
 func (s *Scanner) Scan() (tokens.Token, Position, string, []Error) {
 
 	pos := Position{Offset: s.offset - s.width, Row: s.row, Col: s.col}

@@ -4,6 +4,8 @@
 
 package tokens
 
+// Token represents a single Rego source code token
+// for use by the Parser.
 type Token int
 
 func (t Token) String() string {
@@ -13,6 +15,7 @@ func (t Token) String() string {
 	return strings[t]
 }
 
+// All tokens must be defined here
 const (
 	Illegal Token = iota
 	EOF
@@ -123,6 +126,10 @@ var keywords = map[string]Token{
 	"false":   False,
 }
 
+// Keyword will return a token for the passed in
+// literal value. If the value is a Rego keyword
+// then the appropriate token is returned. Everything
+// else is an Ident.
 func Keyword(lit string) Token {
 	if tok, ok := keywords[lit]; ok {
 		return tok
