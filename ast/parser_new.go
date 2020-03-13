@@ -49,26 +49,35 @@ func (s *state) Text(offset, end int) []byte {
 	return nil
 }
 
+// Parser is used to parse Rego statements
 type Parser struct {
 	r io.Reader
 	s *state
 }
 
+// NewParser creates and initializes a Parser
 func NewParser() *Parser {
 	p := &Parser{s: &state{}}
 	return p
 }
 
+// WithFilename provides the filename for Location details
+// on parsed statements.
 func (p *Parser) WithFilename(filename string) *Parser {
 	p.s.loc.File = filename
 	return p
 }
 
+// WithReader provides the io.Reader that the parser will
+// use as its source.
 func (p *Parser) WithReader(r io.Reader) *Parser {
 	p.r = r
 	return p
 }
 
+// Parse will read the Rego source and parse statements and
+// comments as they are found. Any errors encountered while
+// parsing will be accumulated and returned as a list of Errors.
 func (p *Parser) Parse() ([]Statement, []*Comment, Errors) {
 
 	var err error
@@ -247,12 +256,12 @@ func (p *Parser) parseImport() *Import {
 
 		alias := p.parseTerm()
 
-		if v, ok := alias.Value.(Var); !ok {
+		v, ok := alias.Value.(Var)
+		if !ok {
 			p.error(p.s.Loc(), "expected var")
 			return nil
-		} else {
-			imp.Alias = v
 		}
+		imp.Alias = v
 	}
 
 	return &imp
