@@ -3,8 +3,8 @@
 // license that can be found in the LICENSE file.
 
 // This file contains extra functions for parsing Rego.
-// Most of the parsing is handled by the auto-generated code in
-// parser.go, however, there are additional utilities that are
+// Most of the parsing is handled by the code in parser.go,
+// however, there are additional utilities that are
 // helpful for dealing with Rego source inputs (e.g., REPL
 // statements, source files, etc.)
 
@@ -514,12 +514,6 @@ func ParseStatement(input string) (Statement, error) {
 		return nil, fmt.Errorf("expected exactly one statement")
 	}
 	return stmts[0], nil
-}
-
-// CommentsOption returns a parser option to initialize the comments store within
-// the parser.
-func CommentsOption() Option {
-	return GlobalStore(commentsKey, map[commentKey]*Comment{})
 }
 
 type commentKey struct {

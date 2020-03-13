@@ -13,17 +13,6 @@ import (
 	"github.com/open-policy-agent/opa/ast"
 )
 
-// Bytes formats Rego source code. The bytes provided do not have to be an entire
-// source file, but they must be parse-able. If the bytes are not parse-able, Bytes
-// will return an error resulting from the attempt to parse them.
-func Bytes(src []byte) ([]byte, error) {
-	astElem, err := ast.Parse("", src, ast.CommentsOption())
-	if err != nil {
-		return nil, err
-	}
-	return Ast(astElem)
-}
-
 // Source formats a Rego source file. The bytes provided must describe a complete
 // Rego module. If they don't, Source will return an error resulting from the attempt
 // to parse the bytes.
