@@ -49,13 +49,13 @@ func (s *state) Text(offset, end int) []byte {
 	return nil
 }
 
-// Parser is used to parse Rego statements
+// Parser is used to parse Rego statements.
 type Parser struct {
 	r io.Reader
 	s *state
 }
 
-// NewParser creates and initializes a Parser
+// NewParser creates and initializes a Parser.
 func NewParser() *Parser {
 	p := &Parser{s: &state{}}
 	return p
@@ -605,7 +605,7 @@ func (p *Parser) parseSome() *Expr {
 			return nil
 		}
 
-		decl.Symbols = append(decl.Symbols, p.parseTermVar())
+		decl.Symbols = append(decl.Symbols, p.parseVar())
 
 		p.scan()
 
@@ -765,7 +765,7 @@ func (p *Parser) parseTerm() *Term {
 	case tokens.String:
 		term = p.parseString()
 	case tokens.Ident:
-		term = p.parseTermVar()
+		term = p.parseVar()
 	case tokens.LBrack:
 		term = p.parseArray()
 	case tokens.LBrace:
@@ -836,7 +836,7 @@ func (p *Parser) parseNumber() *Term {
 	s := prefix + p.s.lit
 	f, ok := new(big.Float).SetString(s)
 	if !ok {
-		p.error(p.s.Loc(), "unable to parse number")
+		p.error(p.s.Loc(), "expected number")
 		return nil
 	}
 
@@ -926,7 +926,7 @@ func (p *Parser) parseRef(head *Term, offset int) (term *Term) {
 	case Var, Array, Object, Set, *ArrayComprehension, *ObjectComprehension, *SetComprehension, Call:
 		// ok
 	default:
-		p.errorf(loc, "ref cannot contain %v", TypeName(h))
+		p.errorf(loc, "illegal ref (head cannot be %v)", TypeName(h))
 	}
 
 	ref := []*Term{head}
@@ -993,13 +993,13 @@ func (p *Parser) parseArray() (term *Term) {
 		return ArrayTerm()
 	}
 
-	possibleComprehension := true
+	potentialComprehension := true
 
 	// Skip leading commas, eg [, x, y]
 	// Supported for backwards compatibility. In the future
 	// we should make this a parse error.
 	if p.s.tok == tokens.Comma {
-		possibleComprehension = false
+		potentialComprehension = false
 		p.scan()
 	}
 
@@ -1028,7 +1028,7 @@ func (p *Parser) parseArray() (term *Term) {
 		}
 		return nil
 	case tokens.Or:
-		if possibleComprehension {
+		if potentialComprehension {
 			// Try to parse as if it is an array comprehension
 			p.scan()
 			if body := p.parseBody(tokens.RBrack); body != nil {
@@ -1280,7 +1280,7 @@ func (p *Parser) parseTermOp(values ...tokens.Token) *Term {
 	return nil
 }
 
-func (p *Parser) parseTermVar() *Term {
+func (p *Parser) parseVar() *Term {
 
 	s := p.s.lit
 
@@ -1408,7 +1408,7 @@ func (p *Parser) setLoc(term *Term, loc *location.Location, offset, end int) *Te
 
 func (p *Parser) validateDefaultRuleValue(rule *Rule) bool {
 	if rule.Head.Value == nil {
-		p.error(rule.Loc(), fmt.Sprintf("default rule must have a value"))
+		p.error(rule.Loc(), fmt.Sprintf("illegal default rule (must have a value)"))
 		return false
 	}
 
@@ -1417,8 +1417,8 @@ func (p *Parser) validateDefaultRuleValue(rule *Rule) bool {
 		switch x.(type) {
 		case *ArrayComprehension, *ObjectComprehension, *SetComprehension: // skip closures
 			return true
-		case Ref, Var:
-			p.error(rule.Loc(), fmt.Sprintf("default rule value cannot contain %v", TypeName(x)))
+		case Ref, Var, Call:
+			p.error(rule.Loc(), fmt.Sprintf("illegal default rule (value cannot contain %v)", TypeName(x)))
 			valid = false
 			return true
 		}
