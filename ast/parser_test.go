@@ -1502,25 +1502,50 @@ func TestCommentsWhitespace(t *testing.T) {
 	}{
 		{
 			note:     "trailing spaces",
-			module:   "package test\n# a comment    \t   \n\n",
+			module:   "# a comment    \t   \n",
 			expected: []string{" a comment    \t   "},
 		},
 		{
 			note:     "trailing carriage return",
-			module:   "package test\n# a comment\r\n\n",
+			module:   "# a comment\r\n",
 			expected: []string{" a comment"},
+		},
+		{
+			note:     "trailing carriage return double newline",
+			module:   "# a comment\r\n\n",
+			expected: []string{" a comment"},
+		},
+		{
+			note:     "double trailing carriage return newline",
+			module:   "#\r\r\n",
+			expected: []string{"\r"},
+		},
+		{
+			note:     "double trailing carriage return",
+			module:   "#\r\r",
+			expected: []string{"\r"},
+		},
+		{
+			note:     "carriage return",
+			module:   "#\r",
+			expected: []string{""},
+		},
+		{
+			note:     "carriage return in comment",
+			module:   "# abc\rdef\r\n",
+			expected: []string{" abc\rdef"},
 		},
 	}
 
 	for _, tc := range cases {
 		t.Run(tc.note, func(t *testing.T) {
-			m, err := ParseModule("", tc.module)
+			_, comments, err := ParseStatements("", tc.module)
 			if err != nil {
 				t.Fatalf("Unexpected parse error: %s", err)
 			}
 
 			for i, exp := range tc.expected {
-				actual := string(m.Comments[i].Text)
+				actual := string(comments[i].Text)
 				if exp != actual {
 					t.Errorf("Expected comment text (len %d):\n\n\t%q\n\nbut got (len %d):\n\n\t%q\n\n", len(exp), exp, len(actual), actual)
 				}
