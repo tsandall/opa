@@ -1152,7 +1152,7 @@ func TestRule(t *testing.T) {
 	assertParseErrorContains(t, "else assignment", `p := y { true } else = 2 { true } `, "else keyword cannot be used on rule declared with := operator")
 
 	assertParseErrorContains(t, "default invalid rule name", `default 0[0`, "expected term")
-	assertParseErrorContains(t, "default invalid rule value", `default a[0`, "default rule must have a value")
+	assertParseErrorContains(t, "default invalid rule value", `default a[0`, "illegal default rule (must have a value)")
 	assertParseRule(t, "default missing value", `default a`, &Rule{
 		Default: true,
 		Head: &Head{
@@ -1168,6 +1168,11 @@ func TestRule(t *testing.T) {
 		},
 		Body: MustParseBody(`x := 1`),
 	})
+
+	assertParseErrorContains(t, "default invalid rule head ref", `default a = b.c.d`, "illegal default rule (value cannot contain ref)")
+	assertParseErrorContains(t, "default invalid rule head call", `default a = g(x)`, "illegal default rule (value cannot contain call)")
+	assertParseErrorContains(t, "default invalid rule head builtin call", `default a = upper("foo")`, "illegal default rule (value cannot contain call)")
+	assertParseErrorContains(t, "default invalid rule head call", `default a = b`, "illegal default rule (value cannot contain var)")
 }
 
 func TestRuleElseKeyword(t *testing.T) {

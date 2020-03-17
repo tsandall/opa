@@ -324,12 +324,12 @@ func ParseRuleFromCallEqExpr(module *Module, lhs, rhs *Term) (*Rule, error) {
 
 	ref, ok := call[0].Value.(Ref)
 	if !ok {
-		return nil, fmt.Errorf("%vs cannot be used in function definition", TypeName(call[0].Value))
+		return nil, fmt.Errorf("%vs cannot be used in function signature", TypeName(call[0].Value))
 	}
 
 	name, ok := ref[0].Value.(Var)
 	if !ok {
-		return nil, fmt.Errorf("%vs cannot be used in function definition", TypeName(ref[0].Value))
+		return nil, fmt.Errorf("%vs cannot be used in function signature", TypeName(ref[0].Value))
 	}
 
 	rule := &Rule{
