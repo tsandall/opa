@@ -1173,6 +1173,11 @@ func TestRule(t *testing.T) {
 	assertParseErrorContains(t, "default invalid rule head call", `default a = g(x)`, "illegal default rule (value cannot contain call)")
 	assertParseErrorContains(t, "default invalid rule head builtin call", `default a = upper("foo")`, "illegal default rule (value cannot contain call)")
 	assertParseErrorContains(t, "default invalid rule head call", `default a = b`, "illegal default rule (value cannot contain var)")
+
+	assertParseError(t, "extra braces", `{ a := 1 }`)
+	assertParseError(t, "invalid rule name dots", `a.b = x { x := 1 }`)
+	assertParseError(t, "invalid rule name dots and call", `a.b(x) { x := 1 }`)
+	assertParseError(t, "invalid rule name hyphen", `a-b = x { x := 1 }`)
 }
 
 func TestRuleElseKeyword(t *testing.T) {
