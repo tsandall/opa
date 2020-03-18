@@ -1186,6 +1186,15 @@ func TestRule(t *testing.T) {
 		},
 		Body: MustParseBody(`x == 1`),
 	})
+
+	assertParseRule(t, "partial object array key", `p[[a, 1, 2]] = x { a := 1; x := "foo" }`, &Rule{
+		Head: &Head{
+			Name:  "p",
+			Key:   ArrayTerm(VarTerm("a"), NumberTerm("1"), NumberTerm("2")),
+			Value: VarTerm("x"),
+		},
+		Body: MustParseBody(`a := 1; x := "foo"`),
+	})
 }
 
 func TestRuleElseKeyword(t *testing.T) {
