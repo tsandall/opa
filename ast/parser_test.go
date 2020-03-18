@@ -1178,6 +1178,14 @@ func TestRule(t *testing.T) {
 	assertParseError(t, "invalid rule name dots", `a.b = x { x := 1 }`)
 	assertParseError(t, "invalid rule name dots and call", `a.b(x) { x := 1 }`)
 	assertParseError(t, "invalid rule name hyphen", `a-b = x { x := 1 }`)
+
+	assertParseRule(t, "wildcard name", `_ { x == 1 }`, &Rule{
+		Head: &Head{
+			Name:  "$0",
+			Value: BooleanTerm(true),
+		},
+		Body: MustParseBody(`x == 1`),
+	})
 }
 
 func TestRuleElseKeyword(t *testing.T) {
@@ -1207,6 +1215,14 @@ func TestRuleElseKeyword(t *testing.T) {
 		x > 200
 	} else {
 		x != 150
+	}
+	
+	_ {
+		x > 0
+	} else {
+	    x == -1
+	} else {
+		x > -100
 	}
 	`
 
@@ -1273,6 +1289,28 @@ func TestRuleElseKeyword(t *testing.T) {
 							Value: BooleanTerm(true),
 						},
 						Body: MustParseBody(`x != 150`),
+					},
+				},
+			},
+
+			{
+				Head: &Head{
+					Name:  Var("$0"),
+					Value: BooleanTerm(true),
+				},
+				Body: MustParseBody(`x > 0`),
+				Else: &Rule{
+					Head: &Head{
+						Name:  Var("$0"),
+						Value: BooleanTerm(true),
+					},
+					Body: MustParseBody(`x == -1`),
+					Else: &Rule{
+						Head: &Head{
+							Name:  Var("$0"),
+							Value: BooleanTerm(true),
+						},
+						Body: MustParseBody(`x > -100`),
 					},
 				},
 			},

@@ -417,7 +417,15 @@ func (p *Parser) parseHead(defaultRule bool) *Head {
 	var head Head
 	head.SetLoc(p.s.Loc())
 
-	head.Name = Var(p.s.lit)
+	if term := p.parseVar(); term != nil {
+		if v, ok := term.Value.(Var); ok {
+			head.Name = v
+		}
+	}
+	if head.Name == "" {
+		p.illegal("expected rule head name")
+	}
+
 	p.scan()
 
 	if p.s.tok == tokens.LParen {
