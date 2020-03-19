@@ -111,6 +111,61 @@ func builtinNetCIDRContains(a, b ast.Value) (ast.Value, error) {
 	return ast.Boolean(cidrContained), nil
 }
 
+func errNetCIDRContainsMatchesSetElem(operand int) error {
+	return fmt.Errorf("operand %v: set element must be string or non-empty array", operand)
+}
+
+func evalNetCIDRContainsMatchesOperand(operand int, a *ast.Term, iter func(cidr, index *ast.Term) error) error {
+	switch v := a.Value.(type) {
+	case ast.String:
+		return iter(a, a)
+	case ast.Array:
+		for i := range v {
+			if err := iter(v[i], ast.IntNumberTerm(i)); err != nil {
+				return err
+			}
+		}
+		return nil
+	case ast.Set:
+		return v.Iter(func(x *ast.Term) error {
+			switch elem := x.Value.(type) {
+			case ast.String:
+				return iter(x, x)
+			case ast.Array:
+				if len(elem) == 0 {
+					return errNetCIDRContainsMatchesSetElem(operand)
+				}
+				return iter(elem[0], x)
+			default:
+				return errNetCIDRContainsMatchesSetElem(operand)
+			}
+		})
+	case ast.Object:
+		return v.Iter(func(k, v *ast.Term) error {
+			return iter(v, k)
+		})
+	}
+	return nil
+}
+
+func builtinNetCIDRContainsMatches(bctx BuiltinContext, args []*ast.Term, iter func(*ast.Term) error) error {
+	result := ast.NewSet()
+	err := evalNetCIDRContainsMatchesOperand(1, args[0], func(cidr1 *ast.Term, index1 *ast.Term) error {
+		return evalNetCIDRContainsMatchesOperand(2, args[1], func(cidr2 *ast.Term, index2 *ast.Term) error {
+			if v, err := builtinNetCIDRContains(cidr1.Value, cidr2.Value); err != nil {
+				return err
+			} else if vb, ok := v.(ast.Boolean); ok && bool(vb) {
+				result.Add(ast.ArrayTerm(index1, index2))
+			}
+			return nil
+		})
+	})
+	if err == nil {
+		return iter(ast.NewTerm(result))
+	}
+	return err
+}
+
 func builtinNetCIDRExpand(bctx BuiltinContext, operands []*ast.Term, iter func(*ast.Term) error) error {
 
 	s, err := builtins.StringOperand(operands[0].Value, 1)
@@ -153,5 +208,6 @@ func init() {
 	RegisterFunctionalBuiltin2(ast.NetCIDROverlap.Name, builtinNetCIDRContains)
 	RegisterFunctionalBuiltin2(ast.NetCIDRIntersects.Name, builtinNetCIDRIntersects)
 	RegisterFunctionalBuiltin2(ast.NetCIDRContains.Name, builtinNetCIDRContains)
+	RegisterBuiltinFunc(ast.NetCIDRContainsMatches.Name, builtinNetCIDRContainsMatches)
 	RegisterBuiltinFunc(ast.NetCIDRExpand.Name, builtinNetCIDRExpand)
 }
