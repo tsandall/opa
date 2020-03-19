@@ -511,7 +511,10 @@ func (p *Parser) parseQuery(requireSemi bool, end tokens.Token) Body {
 		}
 
 		if !p.s.skippedNL {
-			p.illegal(`expected \n or %s or %s`, tokens.Semicolon, end)
+			// If there was already an error then don't pile this one on
+			if len(p.s.errors) == 0 {
+				p.illegal(`expected \n or %s or %s`, tokens.Semicolon, end)
+			}
 			return nil
 		}
 	}
