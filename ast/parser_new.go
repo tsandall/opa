@@ -19,15 +19,16 @@ import (
 // can do efficient shallow copies of these values when doing a
 // save() and restore().
 type state struct {
-	s        *scanner.Scanner
-	last     scanner.Position
-	pos      scanner.Position
-	tok      tokens.Token
-	lit      string
-	loc      Location
-	errors   Errors
-	comments []*Comment
-	wildcard int
+	s         *scanner.Scanner
+	last      scanner.Position
+	skippedNL bool
+	pos       scanner.Position
+	tok       tokens.Token
+	lit       string
+	loc       Location
+	errors    Errors
+	comments  []*Comment
+	wildcard  int
 }
 
 func (s *state) String() string {
@@ -507,6 +508,11 @@ func (p *Parser) parseQuery(requireSemi bool, end tokens.Token) Body {
 
 		if p.s.tok == end || requireSemi {
 			return body
+		}
+
+		if !p.s.skippedNL {
+			p.illegal("expected '\\n' or '%s' or '%s'", tokens.Semicolon, end)
+			return nil
 		}
 	}
 }
@@ -1346,6 +1352,7 @@ func (p *Parser) doScan(skipws bool) {
 	// node so do not update it when scanning.
 	if p.s.tok != tokens.Whitespace {
 		p.s.last = p.s.pos
+		p.s.skippedNL = false
 	}
 
 	var errs []scanner.Error
@@ -1364,8 +1371,13 @@ func (p *Parser) doScan(skipws bool) {
 			p.s.tok = tokens.Illegal
 		}
 
-		if skipws && p.s.tok == tokens.Whitespace {
-			continue
+		if p.s.tok == tokens.Whitespace {
+			if p.s.lit == "\n" {
+				p.s.skippedNL = true
+			}
+			if skipws {
+				continue
+			}
 		}
 
 		if p.s.tok != tokens.Comment {
