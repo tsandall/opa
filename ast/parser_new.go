@@ -162,7 +162,7 @@ func (p *Parser) parsePackage() *Package {
 
 	p.scan()
 	if p.s.tok != tokens.Ident {
-		p.error(p.s.Loc(), "expected ident")
+		p.illegalToken()
 		return nil
 	}
 
@@ -180,7 +180,7 @@ func (p *Parser) parsePackage() *Package {
 			pkg.Path[0] = DefaultRootDocument.Copy().SetLocation(v[0].Location)
 			first, ok := v[0].Value.(Var)
 			if !ok {
-				p.errorf(v[0].Location, "unexpected %v, expecting var", TypeName(v[0].Value))
+				p.errorf(v[0].Location, "unexpected %v token: expecting var", TypeName(v[0].Value))
 				return nil
 			}
 			pkg.Path[1] = StringTerm(string(first)).SetLocation(v[0].Location)
@@ -189,15 +189,20 @@ func (p *Parser) parsePackage() *Package {
 				case String:
 					pkg.Path[i] = v[i-1]
 				default:
-					p.errorf(v[i-1].Location, "unexpected %v, expecting string", TypeName(v[i-1].Value))
+					p.errorf(v[i-1].Location, "unexpected %v token: expecting string", TypeName(v[i-1].Value))
 					return nil
 				}
 			}
+		default:
+			p.illegalToken()
+			return nil
 		}
 	}
 
 	if pkg.Path == nil {
-		p.error(p.s.Loc(), "expected path")
+		if len(p.s.errors) == 0 {
+			p.error(p.s.Loc(), "expected path")
+		}
 		return nil
 	}
 
@@ -227,7 +232,7 @@ func (p *Parser) parseImport() *Import {
 		case Ref:
 			for i := 1; i < len(v); i++ {
 				if _, ok := v[i].Value.(String); !ok {
-					p.errorf(v[i].Location, "unexpected %v, expecting string", TypeName(v[i].Value))
+					p.errorf(v[i].Location, "unexpected %v token: expecting string", TypeName(v[i].Value))
 					return nil
 				}
 			}
@@ -251,7 +256,7 @@ func (p *Parser) parseImport() *Import {
 		p.scan()
 
 		if p.s.tok != tokens.Ident {
-			p.error(p.s.Loc(), "expected var")
+			p.illegal("expected var")
 			return nil
 		}
 
@@ -259,7 +264,7 @@ func (p *Parser) parseImport() *Import {
 
 		v, ok := alias.Value.(Var)
 		if !ok {
-			p.error(p.s.Loc(), "expected var")
+			p.illegal("expected var")
 			return nil
 		}
 		imp.Alias = v
@@ -836,7 +841,7 @@ func (p *Parser) parseNumber() *Term {
 		case tokens.Number, tokens.Dot:
 			break
 		default:
-			p.error(p.s.Loc(), "expected number")
+			p.illegal("expected number")
 			return nil
 		}
 	}
@@ -844,7 +849,7 @@ func (p *Parser) parseNumber() *Term {
 		prefix += "."
 		p.scan()
 		if p.s.tok != tokens.Number {
-			p.error(p.s.Loc(), "expected number")
+			p.illegal("expected number")
 			return nil
 		}
 	}
@@ -853,7 +858,7 @@ func (p *Parser) parseNumber() *Term {
 	s := prefix + p.s.lit
 	f, ok := new(big.Float).SetString(s)
 	if !ok {
-		p.error(p.s.Loc(), "expected number")
+		p.illegal("expected number")
 		return nil
 	}
 
@@ -881,7 +886,7 @@ func (p *Parser) parseString() *Term {
 		var s string
 		err := json.Unmarshal([]byte(p.s.lit), &s)
 		if err != nil {
-			p.error(p.s.Loc(), "illegal string literal")
+			p.errorf(p.s.Loc(), "illegal string literal: %s", p.s.lit)
 			return nil
 		}
 		term := StringTerm(s).SetLocation(p.s.Loc())
