@@ -93,6 +93,7 @@ func (s *Scanner) Scan() (tokens.Token, Position, string, []Error) {
 	var lit string
 
 	if s.isWhitespace() {
+		lit = string(s.curr)
 		s.next()
 		tok = tokens.Whitespace
 	} else if isLetter(s.curr) {
