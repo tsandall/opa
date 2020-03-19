@@ -1134,9 +1134,9 @@ func TestRule(t *testing.T) {
 	})
 
 	// TODO: expect expressions instead?
-	assertParseErrorContains(t, "empty body", `f(_) = y {}`, "rego_parse_error: unexpected } token: expected term")
-	assertParseErrorContains(t, "empty rule body", "p {}", "rego_parse_error: unexpected } token: expected term")
-	assertParseErrorContains(t, "unmatched braces", `f(x) = y { trim(x, ".", y) `, `rego_parse_error: unexpected eof token: expected '\n' or ';' or '}'`)
+	assertParseErrorContains(t, "empty body", `f(_) = y {}`, "rego_parse_error: unexpected } token")
+	assertParseErrorContains(t, "empty rule body", "p {}", "rego_parse_error: unexpected } token")
+	assertParseErrorContains(t, "unmatched braces", `f(x) = y { trim(x, ".", y) `, `rego_parse_error: unexpected eof token: expected \n or ; or }`)
 
 	// TODO: how to highlight that assignment is incorrect here?
 	assertParseErrorContains(t, "no output", `f(_) = { "foo" = "bar" }`, "rego_parse_error: unexpected eq token: expected rule value term")
@@ -1151,7 +1151,7 @@ func TestRule(t *testing.T) {
 	assertParseErrorContains(t, "function assignment", `f(x) := y { true }`, "functions must use = operator (not := operator)")
 	assertParseErrorContains(t, "else assignment", `p := y { true } else = 2 { true } `, "else keyword cannot be used on rule declared with := operator")
 
-	assertParseErrorContains(t, "default invalid rule name", `default 0[0`, "expected term")
+	assertParseErrorContains(t, "default invalid rule name", `default 0[0`, "unexpected default keyword")
 	assertParseErrorContains(t, "default invalid rule value", `default a[0`, "illegal default rule (must have a value)")
 	assertParseRule(t, "default missing value", `default a`, &Rule{
 		Default: true,
@@ -1896,7 +1896,7 @@ func TestNoMatchError(t *testing.T) {
 
 	_, err := ParseModule("foo.rego", mod)
 
-	expected := "1 error occurred: foo.rego:5: rego_parse_error: unexpected } token: expected term"
+	expected := "1 error occurred: foo.rego:5: rego_parse_error: unexpected } token"
 
 	if !strings.HasPrefix(err.Error(), expected) {
 		t.Fatalf("Bad parse error, expected %v but got: %v", expected, err)
@@ -1987,7 +1987,7 @@ p = "foo`},
 			input: `
 package test
 	as`,
-			err: `1 error occurred: test.rego:3: rego_parse_error: unexpected as keyword: expected term
+			err: `1 error occurred: test.rego:3: rego_parse_error: unexpected as keyword
 	as
 	^`},
 		{
@@ -2001,7 +2001,7 @@ package test
 p = true {
 		as
 }`,
-			err: `1 error occurred: test.rego:4: rego_parse_error: unexpected as keyword: expected term
+			err: `1 error occurred: test.rego:4: rego_parse_error: unexpected as keyword
 	as
 	^`},
 	}

@@ -511,7 +511,7 @@ func (p *Parser) parseQuery(requireSemi bool, end tokens.Token) Body {
 		}
 
 		if !p.s.skippedNL {
-			p.illegal("expected '\\n' or '%s' or '%s'", tokens.Semicolon, end)
+			p.illegal(`expected \n or %s or %s`, tokens.Semicolon, end)
 			return nil
 		}
 	}
@@ -796,7 +796,7 @@ func (p *Parser) parseTerm() *Term {
 			}
 		}
 	default:
-		p.illegal("expected term")
+		p.illegalToken()
 		return nil
 	}
 
@@ -1329,12 +1329,28 @@ func (p *Parser) errorf(loc *location.Location, f string, a ...interface{}) {
 
 func (p *Parser) illegal(note string, a ...interface{}) {
 
-	if p.s.tok >= tokens.Package && p.s.tok <= tokens.False {
-		p.errorf(p.s.Loc(), "unexpected %v keyword: %v", p.s.tok, fmt.Sprintf(note, a...))
+	tok := p.s.tok.String()
+
+	if p.s.tok == tokens.Illegal {
+		p.errorf(p.s.Loc(), "illegal token")
 		return
 	}
 
-	p.errorf(p.s.Loc(), "unexpected %v token: %v", p.s.tok, fmt.Sprintf(note, a...))
+	tokType := "token"
+	if p.s.tok >= tokens.Package && p.s.tok <= tokens.False {
+		tokType = "keyword"
+	}
+
+	note = fmt.Sprintf(note, a...)
+	if len(note) > 0 {
+		p.errorf(p.s.Loc(), "unexpected %s %s: %v", tok, tokType, note)
+	} else {
+		p.errorf(p.s.Loc(), "unexpected %s %s", tok, tokType)
+	}
+}
+
+func (p *Parser) illegalToken() {
+	p.illegal("")
 }
 
 func (p *Parser) scan() {

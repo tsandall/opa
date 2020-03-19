@@ -3240,7 +3240,7 @@ func TestBadQueryV1(t *testing.T) {
   "errors": [
     {
       "code": "rego_parse_error",
-      "message": "unexpected illegal token: expected term",
+      "message": "illegal token",
       "location": {
         "file": "",
         "row": 1,
