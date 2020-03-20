@@ -20,10 +20,10 @@ import (
 // save() and restore().
 type state struct {
 	s         *scanner.Scanner
-	last      scanner.Position
+	lastEnd   int
 	skippedNL bool
-	pos       scanner.Position
 	tok       tokens.Token
+	tokEnd    int
 	lit       string
 	loc       Location
 	errors    Errors
@@ -538,7 +538,7 @@ func (p *Parser) parseLiteral() (expr *Expr) {
 
 	defer func() {
 		if expr != nil {
-			loc.Text = p.s.Text(offset, p.s.last.End)
+			loc.Text = p.s.Text(offset, p.s.lastEnd)
 			expr.SetLoc(loc)
 		}
 	}()
@@ -684,7 +684,7 @@ func (p *Parser) parseTermRelationRec(lhs *Term, offset int) *Term {
 	if lhs != nil {
 		if op := p.parseTermOp(tokens.Equal, tokens.Neq, tokens.Lt, tokens.Gt, tokens.Lte, tokens.Gte); op != nil {
 			if rhs := p.parseTermOr(nil, p.s.loc.Offset); rhs != nil {
-				call := p.setLoc(CallTerm(op, lhs, rhs), lhs.Location, offset, p.s.last.End)
+				call := p.setLoc(CallTerm(op, lhs, rhs), lhs.Location, offset, p.s.lastEnd)
 				switch p.s.tok {
 				case tokens.Equal, tokens.Neq, tokens.Lt, tokens.Gt, tokens.Lte, tokens.Gte:
 					return p.parseTermRelationRec(call, offset)
@@ -704,7 +704,7 @@ func (p *Parser) parseTermOr(lhs *Term, offset int) *Term {
 	if lhs != nil {
 		if op := p.parseTermOp(tokens.Or); op != nil {
 			if rhs := p.parseTermAnd(nil, p.s.loc.Offset); rhs != nil {
-				call := p.setLoc(CallTerm(op, lhs, rhs), lhs.Location, offset, p.s.last.End)
+				call := p.setLoc(CallTerm(op, lhs, rhs), lhs.Location, offset, p.s.lastEnd)
 				switch p.s.tok {
 				case tokens.Or:
 					return p.parseTermOr(call, offset)
@@ -725,7 +725,7 @@ func (p *Parser) parseTermAnd(lhs *Term, offset int) *Term {
 	if lhs != nil {
 		if op := p.parseTermOp(tokens.And); op != nil {
 			if rhs := p.parseTermArith(nil, p.s.loc.Offset); rhs != nil {
-				call := p.setLoc(CallTerm(op, lhs, rhs), lhs.Location, offset, p.s.last.End)
+				call := p.setLoc(CallTerm(op, lhs, rhs), lhs.Location, offset, p.s.lastEnd)
 				switch p.s.tok {
 				case tokens.And:
 					return p.parseTermAnd(call, offset)
@@ -746,7 +746,7 @@ func (p *Parser) parseTermArith(lhs *Term, offset int) *Term {
 	if lhs != nil {
 		if op := p.parseTermOp(tokens.Add, tokens.Sub); op != nil {
 			if rhs := p.parseTermFactor(nil, p.s.loc.Offset); rhs != nil {
-				call := p.setLoc(CallTerm(op, lhs, rhs), lhs.Location, offset, p.s.last.End)
+				call := p.setLoc(CallTerm(op, lhs, rhs), lhs.Location, offset, p.s.lastEnd)
 				switch p.s.tok {
 				case tokens.Add, tokens.Sub:
 					return p.parseTermArith(call, offset)
@@ -766,7 +766,7 @@ func (p *Parser) parseTermFactor(lhs *Term, offset int) *Term {
 	if lhs != nil {
 		if op := p.parseTermOp(tokens.Mul, tokens.Quo, tokens.Rem); op != nil {
 			if rhs := p.parseTerm(); rhs != nil {
-				call := p.setLoc(CallTerm(op, lhs, rhs), lhs.Location, offset, p.s.last.End)
+				call := p.setLoc(CallTerm(op, lhs, rhs), lhs.Location, offset, p.s.lastEnd)
 				switch p.s.tok {
 				case tokens.Mul, tokens.Quo, tokens.Rem:
 					return p.parseTermFactor(call, offset)
@@ -803,7 +803,7 @@ func (p *Parser) parseTerm() *Term {
 		p.scan()
 		if r := p.parseTermRelation(); r != nil {
 			if p.s.tok == tokens.RParen {
-				r.Location.Text = p.s.Text(offset, p.s.pos.End)
+				r.Location.Text = p.s.Text(offset, p.s.tokEnd)
 				term = r
 			} else {
 				p.error(p.s.Loc(), "non-terminated expression")
@@ -924,7 +924,7 @@ func (p *Parser) parseCall(operator *Term, offset int) (term *Term) {
 	p.scan()
 
 	if p.s.tok == tokens.RParen {
-		end = p.s.pos.End
+		end = p.s.tokEnd
 		p.scanWS()
 		if operator.Equal(setConstructor) {
 			return SetTerm()
@@ -933,7 +933,7 @@ func (p *Parser) parseCall(operator *Term, offset int) (term *Term) {
 	}
 
 	if r := p.parseTermList(tokens.RParen, []*Term{operator}); r != nil {
-		end = p.s.pos.End
+		end = p.s.tokEnd
 		p.scanWS()
 		return CallTerm(r...)
 	}
@@ -975,13 +975,13 @@ func (p *Parser) parseRef(head *Term, offset int) (term *Term) {
 				switch p.s.tok {
 				case tokens.Whitespace:
 					p.scan()
-					end = p.s.last.End
+					end = p.s.lastEnd
 					return term
 				case tokens.Dot, tokens.LBrack:
 					term = p.parseRef(term, offset)
 				}
 			}
-			end = p.s.pos.End
+			end = p.s.tokEnd
 			return term
 		case tokens.LBrack:
 			p.scan()
@@ -996,11 +996,11 @@ func (p *Parser) parseRef(head *Term, offset int) (term *Term) {
 				return nil
 			}
 		case tokens.Whitespace:
-			end = p.s.last.End
+			end = p.s.lastEnd
 			p.scan()
 			return RefTerm(ref...)
 		default:
-			end = p.s.last.End
+			end = p.s.lastEnd
 			return RefTerm(ref...)
 		}
 	}
@@ -1012,7 +1012,7 @@ func (p *Parser) parseArray() (term *Term) {
 	offset := p.s.loc.Offset
 
 	defer func() {
-		p.setLoc(term, loc, offset, p.s.pos.End)
+		p.setLoc(term, loc, offset, p.s.tokEnd)
 	}()
 
 	p.scan()
@@ -1083,7 +1083,7 @@ func (p *Parser) parseSetOrObject() (term *Term) {
 	offset := p.s.loc.Offset
 
 	defer func() {
-		p.setLoc(term, loc, offset, p.s.pos.End)
+		p.setLoc(term, loc, offset, p.s.tokEnd)
 	}()
 
 	p.scan()
@@ -1381,18 +1381,20 @@ func (p *Parser) doScan(skipws bool) {
 	// complex AST nodes. Whitespace never affects the last position of an AST
 	// node so do not update it when scanning.
 	if p.s.tok != tokens.Whitespace {
-		p.s.last = p.s.pos
+		p.s.lastEnd = p.s.tokEnd
 		p.s.skippedNL = false
 	}
 
 	var errs []scanner.Error
 	for {
-		p.s.tok, p.s.pos, p.s.lit, errs = p.s.s.Scan()
+		var pos scanner.Position
+		p.s.tok, pos, p.s.lit, errs = p.s.s.Scan()
 
-		p.s.loc.Row = p.s.pos.Row
-		p.s.loc.Col = p.s.pos.Col
-		p.s.loc.Offset = p.s.pos.Offset
-		p.s.loc.Text = p.s.Text(p.s.pos.Offset, p.s.pos.End)
+		p.s.tokEnd = pos.End
+		p.s.loc.Row = pos.Row
+		p.s.loc.Col = pos.Col
+		p.s.loc.Offset = pos.Offset
+		p.s.loc.Text = p.s.Text(pos.Offset, pos.End)
 
 		for _, err := range errs {
 			p.error(p.s.Loc(), err.Message)
