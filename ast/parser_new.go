@@ -497,6 +497,12 @@ func (p *Parser) parseBody(end tokens.Token) Body {
 
 func (p *Parser) parseQuery(requireSemi bool, end tokens.Token) Body {
 	body := Body{}
+
+	if p.s.tok == end {
+		p.error(p.s.Loc(), "found empty body")
+		return nil
+	}
+
 	for {
 
 		expr := p.parseLiteral()

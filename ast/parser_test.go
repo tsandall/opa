@@ -1210,6 +1210,7 @@ func TestRule(t *testing.T) {
 	})
 	assertParseError(t, "invalid rule body no separator", `p { a = "foo"bar }`)
 	assertParseError(t, "invalid rule body no newline", `p { a b c }`)
+	assertParseErrorContains(t, "invalid rule body contents", `p { }`, "found empty body")
 }
 
 func TestRuleElseKeyword(t *testing.T) {
