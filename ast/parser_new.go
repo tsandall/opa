@@ -1331,7 +1331,7 @@ func (p *Parser) errorf(loc *location.Location, f string, a ...interface{}) {
 		Code:     ParseErr,
 		Message:  fmt.Sprintf(f, a...),
 		Location: loc,
-		Details:  newParserErrorDetail(p.s.s.Bytes(), p.s.pos.Offset),
+		Details:  newParserErrorDetail(p.s.s.Bytes(), loc.Offset),
 	})
 }
 
@@ -1385,6 +1385,7 @@ func (p *Parser) doScan(skipws bool) {
 
 		p.s.loc.Row = p.s.pos.Row
 		p.s.loc.Col = p.s.pos.Col
+		p.s.loc.Offset = p.s.pos.Offset
 		p.s.loc.Text = p.s.Text(p.s.pos.Offset, p.s.pos.End)
 
 		for _, err := range errs {

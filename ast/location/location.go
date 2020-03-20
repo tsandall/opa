@@ -10,10 +10,11 @@ import (
 
 // Location records a position in source code
 type Location struct {
-	Text []byte `json:"-"`    // The original text fragment from the source.
-	File string `json:"file"` // The name of the source file (which may be empty).
-	Row  int    `json:"row"`  // The line in the source.
-	Col  int    `json:"col"`  // The column in the row.
+	Text   []byte `json:"-"`    // The original text fragment from the source.
+	File   string `json:"file"` // The name of the source file (which may be empty).
+	Row    int    `json:"row"`  // The line in the source.
+	Col    int    `json:"col"`  // The column in the row.
+	Offset int    `json:"-"`    // The byte offset for the location in the source.
 }
 
 // NewLocation returns a new Location object.

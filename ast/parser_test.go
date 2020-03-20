@@ -923,6 +923,19 @@ func TestImport(t *testing.T) {
 	assertParseErrorContains(t, "non-ground ref", "import data.foo[x]", "rego_parse_error: unexpected var token: expecting string")
 	assertParseErrorContains(t, "non-string", "import input.foo[0]", "rego_parse_error: unexpected number token: expecting string")
 	assertParseErrorContains(t, "unknown root", "import foo.bar", "rego_parse_error: unexpected import path, must begin with one of: {data, input}, got: foo")
+
+	_, _, err := ParseStatements("", "package foo\nimport bar.data\ndefault foo=1")
+	if err == nil {
+		t.Fatalf("Expected error, but got nil")
+	}
+	if len(err.(Errors)) > 1 {
+		t.Fatalf("Expected a single error, got %s", err)
+	}
+	txt := err.(Errors)[0].Details.Lines()[0]
+	expected := "import bar.data"
+	if txt != expected {
+		t.Fatalf("Expected error detail text '%s' but got '%s'", expected, txt)
+	}
 }
 
 func TestIsValidImportPath(t *testing.T) {
