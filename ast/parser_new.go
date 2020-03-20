@@ -533,7 +533,7 @@ func (p *Parser) parseQuery(requireSemi bool, end tokens.Token) Body {
 
 func (p *Parser) parseLiteral() (expr *Expr) {
 
-	offset := p.s.pos.Offset
+	offset := p.s.loc.Offset
 	loc := p.s.Loc()
 
 	defer func() {
@@ -674,7 +674,7 @@ func (p *Parser) parseExpr() *Expr {
 // term cannot be parsed the return value is nil and error will be recorded. The
 // scanner will be advanced to the next token before returning.
 func (p *Parser) parseTermRelation() *Term {
-	return p.parseTermRelationRec(nil, p.s.pos.Offset)
+	return p.parseTermRelationRec(nil, p.s.loc.Offset)
 }
 
 func (p *Parser) parseTermRelationRec(lhs *Term, offset int) *Term {
@@ -683,7 +683,7 @@ func (p *Parser) parseTermRelationRec(lhs *Term, offset int) *Term {
 	}
 	if lhs != nil {
 		if op := p.parseTermOp(tokens.Equal, tokens.Neq, tokens.Lt, tokens.Gt, tokens.Lte, tokens.Gte); op != nil {
-			if rhs := p.parseTermOr(nil, p.s.pos.Offset); rhs != nil {
+			if rhs := p.parseTermOr(nil, p.s.loc.Offset); rhs != nil {
 				call := p.setLoc(CallTerm(op, lhs, rhs), lhs.Location, offset, p.s.last.End)
 				switch p.s.tok {
 				case tokens.Equal, tokens.Neq, tokens.Lt, tokens.Gt, tokens.Lte, tokens.Gte:
@@ -703,7 +703,7 @@ func (p *Parser) parseTermOr(lhs *Term, offset int) *Term {
 	}
 	if lhs != nil {
 		if op := p.parseTermOp(tokens.Or); op != nil {
-			if rhs := p.parseTermAnd(nil, p.s.pos.Offset); rhs != nil {
+			if rhs := p.parseTermAnd(nil, p.s.loc.Offset); rhs != nil {
 				call := p.setLoc(CallTerm(op, lhs, rhs), lhs.Location, offset, p.s.last.End)
 				switch p.s.tok {
 				case tokens.Or:
@@ -724,7 +724,7 @@ func (p *Parser) parseTermAnd(lhs *Term, offset int) *Term {
 	}
 	if lhs != nil {
 		if op := p.parseTermOp(tokens.And); op != nil {
-			if rhs := p.parseTermArith(nil, p.s.pos.Offset); rhs != nil {
+			if rhs := p.parseTermArith(nil, p.s.loc.Offset); rhs != nil {
 				call := p.setLoc(CallTerm(op, lhs, rhs), lhs.Location, offset, p.s.last.End)
 				switch p.s.tok {
 				case tokens.And:
@@ -745,7 +745,7 @@ func (p *Parser) parseTermArith(lhs *Term, offset int) *Term {
 	}
 	if lhs != nil {
 		if op := p.parseTermOp(tokens.Add, tokens.Sub); op != nil {
-			if rhs := p.parseTermFactor(nil, p.s.pos.Offset); rhs != nil {
+			if rhs := p.parseTermFactor(nil, p.s.loc.Offset); rhs != nil {
 				call := p.setLoc(CallTerm(op, lhs, rhs), lhs.Location, offset, p.s.last.End)
 				switch p.s.tok {
 				case tokens.Add, tokens.Sub:
@@ -799,7 +799,7 @@ func (p *Parser) parseTerm() *Term {
 	case tokens.LBrace:
 		term = p.parseSetOrObject()
 	case tokens.LParen:
-		offset := p.s.pos.Offset
+		offset := p.s.loc.Offset
 		p.scan()
 		if r := p.parseTermRelation(); r != nil {
 			if p.s.tok == tokens.RParen {
@@ -821,7 +821,7 @@ func (p *Parser) parseTermFinish(head *Term) *Term {
 	if head == nil {
 		return nil
 	}
-	offset := p.s.pos.Offset
+	offset := p.s.loc.Offset
 	p.scanWS()
 	switch p.s.tok {
 	case tokens.LParen, tokens.Dot, tokens.LBrack:
@@ -970,7 +970,7 @@ func (p *Parser) parseRef(head *Term, offset int) (term *Term) {
 			ref = append(ref, StringTerm(p.s.lit).SetLocation(p.s.Loc()))
 			p.scanWS()
 		case tokens.LParen:
-			term = p.parseCall(p.setLoc(RefTerm(ref...), loc, offset, p.s.pos.Offset), offset)
+			term = p.parseCall(p.setLoc(RefTerm(ref...), loc, offset, p.s.loc.Offset), offset)
 			if term != nil {
 				switch p.s.tok {
 				case tokens.Whitespace:
@@ -1009,7 +1009,7 @@ func (p *Parser) parseRef(head *Term, offset int) (term *Term) {
 func (p *Parser) parseArray() (term *Term) {
 
 	loc := p.s.Loc()
-	offset := p.s.pos.Offset
+	offset := p.s.loc.Offset
 
 	defer func() {
 		p.setLoc(term, loc, offset, p.s.pos.End)
@@ -1080,7 +1080,7 @@ func (p *Parser) parseArray() (term *Term) {
 func (p *Parser) parseSetOrObject() (term *Term) {
 
 	loc := p.s.Loc()
-	offset := p.s.pos.Offset
+	offset := p.s.loc.Offset
 
 	defer func() {
 		p.setLoc(term, loc, offset, p.s.pos.End)
