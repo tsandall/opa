@@ -5,6 +5,17 @@ project adheres to [Semantic Versioning](http://semver.org/).
 
 ## Unreleased
 
+# Parser Stuff
+- Removed `format.Bytes` API - Not supported with new parser
+- Perf fix for large-ish JSON https://github.com/open-policy-agent/opa/issues/1251
+- Numbers no longer lose precision https://github.com/open-policy-agent/opa/issues/501
+- Leading commas actually parse the object with values https://github.com/open-policy-agent/opa/issues/2198
+- Wrapping rules w/ `{}` is no longer a thing https://github.com/open-policy-agent/opa/issues/2199
+- Dots/hypens/etc in rule name can no longer "work" https://github.com/open-policy-agent/opa/issues/2200
+- Object comprehension amgiguity (now has correct priority of comprehension -> object in all cases) https://github.com/open-policy-agent/opa/issues/2201
+- Partial rules for objects can have any valid term for the key in the head now https://github.com/open-policy-agent/opa/issues/2202
+- (feature) Implicit else bodies https://github.com/open-policy-agent/opa/issues/2203
+
 ## 0.18.0
 
 ### Features
