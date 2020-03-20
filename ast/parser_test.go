@@ -1147,8 +1147,8 @@ func TestRule(t *testing.T) {
 	})
 
 	// TODO: expect expressions instead?
-	assertParseErrorContains(t, "empty body", `f(_) = y {}`, "rego_parse_error: unexpected } token")
-	assertParseErrorContains(t, "empty rule body", "p {}", "rego_parse_error: unexpected } token")
+	assertParseErrorContains(t, "empty body", `f(_) = y {}`, "rego_parse_error: found empty body")
+	assertParseErrorContains(t, "empty rule body", "p {}", "rego_parse_error: found empty body")
 	assertParseErrorContains(t, "unmatched braces", `f(x) = y { trim(x, ".", y) `, `rego_parse_error: unexpected eof token: expected \n or ; or }`)
 
 	// TODO: how to highlight that assignment is incorrect here?
@@ -1210,7 +1210,6 @@ func TestRule(t *testing.T) {
 	})
 	assertParseError(t, "invalid rule body no separator", `p { a = "foo"bar }`)
 	assertParseError(t, "invalid rule body no newline", `p { a b c }`)
-	assertParseErrorContains(t, "invalid rule body contents", `p { }`, "found empty body")
 }
 
 func TestRuleElseKeyword(t *testing.T) {
