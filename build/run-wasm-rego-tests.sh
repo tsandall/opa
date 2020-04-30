@@ -44,7 +44,6 @@ function generate_testcases {
     purge_testgen_container
     docker run \
         --name $TESTGEN_CONTAINER_NAME \
-        -u $(id -u):$(id -g) \
         -v $PWD/.go/bin:/go/bin \
         -v $PWD:/src \
         -v $ASSETS:/assets \
