@@ -22,6 +22,7 @@ var checkParams = struct {
 	errLimit   int
 	ignore     []string
 	bundleMode bool
+	features   string
 }{
 	format: util.NewEnumFlag(checkFormatPretty, []string{
 		checkFormatPretty, checkFormatJSON,
@@ -84,8 +85,13 @@ func checkModules(args []string) int {
 		}
 	}
 
-	compiler := ast.NewCompiler().SetErrorLimit(checkParams.errLimit)
+	features, err := ast.LoadFeatures(checkParams.features)
+	if err != nil {
+		outputErrors(fmt.Errorf("%v: %v", checkParams.features, err))
+		return 1
+	}
 
+	compiler := ast.NewCompiler().SetErrorLimit(checkParams.errLimit).WithSupportedFeatures(features)
 	compiler.Compile(modules)
 
 	if !compiler.Failed() {
@@ -123,6 +129,7 @@ func init() {
 	addMaxErrorsFlag(checkCommand.Flags(), &checkParams.errLimit)
 	addIgnoreFlag(checkCommand.Flags(), &checkParams.ignore)
 	checkCommand.Flags().VarP(checkParams.format, "format", "f", "set output format")
+	checkCommand.Flags().StringVarP(&checkParams.features, "features", "", "", "set features.json file path")
 	addBundleModeFlag(checkCommand.Flags(), &checkParams.bundleMode, false)
 	RootCommand.AddCommand(checkCommand)
 }

@@ -1,0 +1,3466 @@
+{
+  "builtins": {
+    "abs": {
+      "name": "abs",
+      "infix": "",
+      "decl": {
+        "args": [
+          {
+            "type": "number"
+          }
+        ],
+        "result": {
+          "type": "number"
+        },
+        "type": "function"
+      },
+      "relation": false
+    },
+    "all": {
+      "name": "all",
+      "infix": "",
+      "decl": {
+        "args": [
+          {
+            "of": [
+              {
+                "of": {
+                  "of": [],
+                  "type": "any"
+                },
+                "type": "set"
+              },
+              {
+                "dynamic": {
+                  "of": [],
+                  "type": "any"
+                },
+                "type": "array"
+              }
+            ],
+            "type": "any"
+          }
+        ],
+        "result": {
+          "type": "boolean"
+        },
+        "type": "function"
+      },
+      "relation": false
+    },
+    "and": {
+      "name": "and",
+      "infix": "\u0026",
+      "decl": {
+        "args": [
+          {
+            "of": {
+              "of": [],
+              "type": "any"
+            },
+            "type": "set"
+          },
+          {
+            "of": {
+              "of": [],
+              "type": "any"
+            },
+            "type": "set"
+          }
+        ],
+        "result": {
+          "of": {
+            "of": [],
+            "type": "any"
+          },
+          "type": "set"
+        },
+        "type": "function"
+      },
+      "relation": false
+    },
+    "any": {
+      "name": "any",
+      "infix": "",
+      "decl": {
+        "args": [
+          {
+            "of": [
+              {
+                "of": {
+                  "of": [],
+                  "type": "any"
+                },
+                "type": "set"
+              },
+              {
+                "dynamic": {
+                  "of": [],
+                  "type": "any"
+                },
+                "type": "array"
+              }
+            ],
+            "type": "any"
+          }
+        ],
+        "result": {
+          "type": "boolean"
+        },
+        "type": "function"
+      },
+      "relation": false
+    },
+    "array.concat": {
+      "name": "array.concat",
+      "infix": "",
+      "decl": {
+        "args": [
+          {
+            "dynamic": {
+              "of": [],
+              "type": "any"
+            },
+            "type": "array"
+          },
+          {
+            "dynamic": {
+              "of": [],
+              "type": "any"
+            },
+            "type": "array"
+          }
+        ],
+        "result": {
+          "dynamic": {
+            "of": [],
+            "type": "any"
+          },
+          "type": "array"
+        },
+        "type": "function"
+      },
+      "relation": false
+    },
+    "array.slice": {
+      "name": "array.slice",
+      "infix": "",
+      "decl": {
+        "args": [
+          {
+            "dynamic": {
+              "of": [],
+              "type": "any"
+            },
+            "type": "array"
+          },
+          {
+            "type": "number"
+          },
+          {
+            "type": "number"
+          }
+        ],
+        "result": {
+          "dynamic": {
+            "of": [],
+            "type": "any"
+          },
+          "type": "array"
+        },
+        "type": "function"
+      },
+      "relation": false
+    },
+    "assign": {
+      "name": "assign",
+      "infix": ":=",
+      "decl": {
+        "args": [
+          {
+            "of": [],
+            "type": "any"
+          },
+          {
+            "of": [],
+            "type": "any"
+          }
+        ],
+        "result": {
+          "type": "boolean"
+        },
+        "type": "function"
+      },
+      "relation": false
+    },
+    "base64.decode": {
+      "name": "base64.decode",
+      "infix": "",
+      "decl": {
+        "args": [
+          {
+            "type": "string"
+          }
+        ],
+        "result": {
+          "type": "string"
+        },
+        "type": "function"
+      },
+      "relation": false
+    },
+    "base64.encode": {
+      "name": "base64.encode",
+      "infix": "",
+      "decl": {
+        "args": [
+          {
+            "type": "string"
+          }
+        ],
+        "result": {
+          "type": "string"
+        },
+        "type": "function"
+      },
+      "relation": false
+    },
+    "base64url.decode": {
+      "name": "base64url.decode",
+      "infix": "",
+      "decl": {
+        "args": [
+          {
+            "type": "string"
+          }
+        ],
+        "result": {
+          "type": "string"
+        },
+        "type": "function"
+      },
+      "relation": false
+    },
+    "base64url.encode": {
+      "name": "base64url.encode",
+      "infix": "",
+      "decl": {
+        "args": [
+          {
+            "type": "string"
+          }
+        ],
+        "result": {
+          "type": "string"
+        },
+        "type": "function"
+      },
+      "relation": false
+    },
+    "bits.and": {
+      "name": "bits.and",
+      "infix": "",
+      "decl": {
+        "args": [
+          {
+            "type": "number"
+          },
+          {
+            "type": "number"
+          }
+        ],
+        "result": {
+          "type": "number"
+        },
+        "type": "function"
+      },
+      "relation": false
+    },
+    "bits.lsh": {
+      "name": "bits.lsh",
+      "infix": "",
+      "decl": {
+        "args": [
+          {
+            "type": "number"
+          },
+          {
+            "type": "number"
+          }
+        ],
+        "result": {
+          "type": "number"
+        },
+        "type": "function"
+      },
+      "relation": false
+    },
+    "bits.negate": {
+      "name": "bits.negate",
+      "infix": "",
+      "decl": {
+        "args": [
+          {
+            "type": "number"
+          }
+        ],
+        "result": {
+          "type": "number"
+        },
+        "type": "function"
+      },
+      "relation": false
+    },
+    "bits.or": {
+      "name": "bits.or",
+      "infix": "",
+      "decl": {
+        "args": [
+          {
+            "type": "number"
+          },
+          {
+            "type": "number"
+          }
+        ],
+        "result": {
+          "type": "number"
+        },
+        "type": "function"
+      },
+      "relation": false
+    },
+    "bits.rsh": {
+      "name": "bits.rsh",
+      "infix": "",
+      "decl": {
+        "args": [
+          {
+            "type": "number"
+          },
+          {
+            "type": "number"
+          }
+        ],
+        "result": {
+          "type": "number"
+        },
+        "type": "function"
+      },
+      "relation": false
+    },
+    "bits.xor": {
+      "name": "bits.xor",
+      "infix": "",
+      "decl": {
+        "args": [
+          {
+            "type": "number"
+          },
+          {
+            "type": "number"
+          }
+        ],
+        "result": {
+          "type": "number"
+        },
+        "type": "function"
+      },
+      "relation": false
+    },
+    "cast_array": {
+      "name": "cast_array",
+      "infix": "",
+      "decl": {
+        "args": [
+          {
+            "of": [],
+            "type": "any"
+          }
+        ],
+        "result": {
+          "dynamic": {
+            "of": [],
+            "type": "any"
+          },
+          "type": "array"
+        },
+        "type": "function"
+      },
+      "relation": false
+    },
+    "cast_boolean": {
+      "name": "cast_boolean",
+      "infix": "",
+      "decl": {
+        "args": [
+          {
+            "of": [],
+            "type": "any"
+          }
+        ],
+        "result": {
+          "type": "boolean"
+        },
+        "type": "function"
+      },
+      "relation": false
+    },
+    "cast_null": {
+      "name": "cast_null",
+      "infix": "",
+      "decl": {
+        "args": [
+          {
+            "of": [],
+            "type": "any"
+          }
+        ],
+        "result": {
+          "type": "null"
+        },
+        "type": "function"
+      },
+      "relation": false
+    },
+    "cast_object": {
+      "name": "cast_object",
+      "infix": "",
+      "decl": {
+        "args": [
+          {
+            "of": [],
+            "type": "any"
+          }
+        ],
+        "result": {
+          "dynamic": {
+            "key": {
+              "of": [],
+              "type": "any"
+            },
+            "value": {
+              "of": [],
+              "type": "any"
+            }
+          },
+          "type": "object"
+        },
+        "type": "function"
+      },
+      "relation": false
+    },
+    "cast_set": {
+      "name": "cast_set",
+      "infix": "",
+      "decl": {
+        "args": [
+          {
+            "of": [],
+            "type": "any"
+          }
+        ],
+        "result": {
+          "of": {
+            "of": [],
+            "type": "any"
+          },
+          "type": "set"
+        },
+        "type": "function"
+      },
+      "relation": false
+    },
+    "cast_string": {
+      "name": "cast_string",
+      "infix": "",
+      "decl": {
+        "args": [
+          {
+            "of": [],
+            "type": "any"
+          }
+        ],
+        "result": {
+          "type": "string"
+        },
+        "type": "function"
+      },
+      "relation": false
+    },
+    "concat": {
+      "name": "concat",
+      "infix": "",
+      "decl": {
+        "args": [
+          {
+            "type": "string"
+          },
+          {
+            "of": [
+              {
+                "of": {
+                  "type": "string"
+                },
+                "type": "set"
+              },
+              {
+                "dynamic": {
+                  "type": "string"
+                },
+                "type": "array"
+              }
+            ],
+            "type": "any"
+          }
+        ],
+        "result": {
+          "type": "string"
+        },
+        "type": "function"
+      },
+      "relation": false
+    },
+    "contains": {
+      "name": "contains",
+      "infix": "",
+      "decl": {
+        "args": [
+          {
+            "type": "string"
+          },
+          {
+            "type": "string"
+          }
+        ],
+        "result": {
+          "type": "boolean"
+        },
+        "type": "function"
+      },
+      "relation": false
+    },
+    "count": {
+      "name": "count",
+      "infix": "",
+      "decl": {
+        "args": [
+          {
+            "of": [
+              {
+                "of": {
+                  "of": [],
+                  "type": "any"
+                },
+                "type": "set"
+              },
+              {
+                "dynamic": {
+                  "of": [],
+                  "type": "any"
+                },
+                "type": "array"
+              },
+              {
+                "dynamic": {
+                  "key": {
+                    "of": [],
+                    "type": "any"
+                  },
+                  "value": {
+                    "of": [],
+                    "type": "any"
+                  }
+                },
+                "type": "object"
+              },
+              {
+                "type": "string"
+              }
+            ],
+            "type": "any"
+          }
+        ],
+        "result": {
+          "type": "number"
+        },
+        "type": "function"
+      },
+      "relation": false
+    },
+    "crypto.md5": {
+      "name": "crypto.md5",
+      "infix": "",
+      "decl": {
+        "args": [
+          {
+            "type": "string"
+          }
+        ],
+        "result": {
+          "type": "string"
+        },
+        "type": "function"
+      },
+      "relation": false
+    },
+    "crypto.sha1": {
+      "name": "crypto.sha1",
+      "infix": "",
+      "decl": {
+        "args": [
+          {
+            "type": "string"
+          }
+        ],
+        "result": {
+          "type": "string"
+        },
+        "type": "function"
+      },
+      "relation": false
+    },
+    "crypto.sha256": {
+      "name": "crypto.sha256",
+      "infix": "",
+      "decl": {
+        "args": [
+          {
+            "type": "string"
+          }
+        ],
+        "result": {
+          "type": "string"
+        },
+        "type": "function"
+      },
+      "relation": false
+    },
+    "crypto.x509.parse_certificates": {
+      "name": "crypto.x509.parse_certificates",
+      "infix": "",
+      "decl": {
+        "args": [
+          {
+            "type": "string"
+          }
+        ],
+        "result": {
+          "dynamic": {
+            "dynamic": {
+              "key": {
+                "type": "string"
+              },
+              "value": {
+                "of": [],
+                "type": "any"
+              }
+            },
+            "type": "object"
+          },
+          "type": "array"
+        },
+        "type": "function"
+      },
+      "relation": false
+    },
+    "div": {
+      "name": "div",
+      "infix": "/",
+      "decl": {
+        "args": [
+          {
+            "type": "number"
+          },
+          {
+            "type": "number"
+          }
+        ],
+        "result": {
+          "type": "number"
+        },
+        "type": "function"
+      },
+      "relation": false
+    },
+    "endswith": {
+      "name": "endswith",
+      "infix": "",
+      "decl": {
+        "args": [
+          {
+            "type": "string"
+          },
+          {
+            "type": "string"
+          }
+        ],
+        "result": {
+          "type": "boolean"
+        },
+        "type": "function"
+      },
+      "relation": false
+    },
+    "eq": {
+      "name": "eq",
+      "infix": "=",
+      "decl": {
+        "args": [
+          {
+            "of": [],
+            "type": "any"
+          },
+          {
+            "of": [],
+            "type": "any"
+          }
+        ],
+        "result": {
+          "type": "boolean"
+        },
+        "type": "function"
+      },
+      "relation": false
+    },
+    "equal": {
+      "name": "equal",
+      "infix": "==",
+      "decl": {
+        "args": [
+          {
+            "of": [],
+            "type": "any"
+          },
+          {
+            "of": [],
+            "type": "any"
+          }
+        ],
+        "result": {
+          "type": "boolean"
+        },
+        "type": "function"
+      },
+      "relation": false
+    },
+    "format_int": {
+      "name": "format_int",
+      "infix": "",
+      "decl": {
+        "args": [
+          {
+            "type": "number"
+          },
+          {
+            "type": "number"
+          }
+        ],
+        "result": {
+          "type": "string"
+        },
+        "type": "function"
+      },
+      "relation": false
+    },
+    "glob.match": {
+      "name": "glob.match",
+      "infix": "",
+      "decl": {
+        "args": [
+          {
+            "type": "string"
+          },
+          {
+            "dynamic": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          {
+            "type": "string"
+          }
+        ],
+        "result": {
+          "type": "boolean"
+        },
+        "type": "function"
+      },
+      "relation": false
+    },
+    "glob.quote_meta": {
+      "name": "glob.quote_meta",
+      "infix": "",
+      "decl": {
+        "args": [
+          {
+            "type": "string"
+          }
+        ],
+        "result": {
+          "type": "string"
+        },
+        "type": "function"
+      },
+      "relation": false
+    },
+    "graph.reachable": {
+      "name": "graph.reachable",
+      "infix": "",
+      "decl": {
+        "args": [
+          {
+            "dynamic": {
+              "key": {
+                "of": [],
+                "type": "any"
+              },
+              "value": {
+                "of": [
+                  {
+                    "of": {
+                      "of": [],
+                      "type": "any"
+                    },
+                    "type": "set"
+                  },
+                  {
+                    "dynamic": {
+                      "of": [],
+                      "type": "any"
+                    },
+                    "type": "array"
+                  }
+                ],
+                "type": "any"
+              }
+            },
+            "type": "object"
+          },
+          {
+            "of": [
+              {
+                "of": {
+                  "of": [],
+                  "type": "any"
+                },
+                "type": "set"
+              },
+              {
+                "dynamic": {
+                  "of": [],
+                  "type": "any"
+                },
+                "type": "array"
+              }
+            ],
+            "type": "any"
+          }
+        ],
+        "result": {
+          "of": {
+            "of": [],
+            "type": "any"
+          },
+          "type": "set"
+        },
+        "type": "function"
+      },
+      "relation": false
+    },
+    "gt": {
+      "name": "gt",
+      "infix": "\u003e",
+      "decl": {
+        "args": [
+          {
+            "of": [],
+            "type": "any"
+          },
+          {
+            "of": [],
+            "type": "any"
+          }
+        ],
+        "result": {
+          "type": "boolean"
+        },
+        "type": "function"
+      },
+      "relation": false
+    },
+    "gte": {
+      "name": "gte",
+      "infix": "\u003e=",
+      "decl": {
+        "args": [
+          {
+            "of": [],
+            "type": "any"
+          },
+          {
+            "of": [],
+            "type": "any"
+          }
+        ],
+        "result": {
+          "type": "boolean"
+        },
+        "type": "function"
+      },
+      "relation": false
+    },
+    "http.send": {
+      "name": "http.send",
+      "infix": "",
+      "decl": {
+        "args": [
+          {
+            "dynamic": {
+              "key": {
+                "type": "string"
+              },
+              "value": {
+                "of": [],
+                "type": "any"
+              }
+            },
+            "type": "object"
+          }
+        ],
+        "result": {
+          "dynamic": {
+            "key": {
+              "of": [],
+              "type": "any"
+            },
+            "value": {
+              "of": [],
+              "type": "any"
+            }
+          },
+          "type": "object"
+        },
+        "type": "function"
+      },
+      "relation": false
+    },
+    "indexof": {
+      "name": "indexof",
+      "infix": "",
+      "decl": {
+        "args": [
+          {
+            "type": "string"
+          },
+          {
+            "type": "string"
+          }
+        ],
+        "result": {
+          "type": "number"
+        },
+        "type": "function"
+      },
+      "relation": false
+    },
+    "intersection": {
+      "name": "intersection",
+      "infix": "",
+      "decl": {
+        "args": [
+          {
+            "of": {
+              "of": {
+                "of": [],
+                "type": "any"
+              },
+              "type": "set"
+            },
+            "type": "set"
+          }
+        ],
+        "result": {
+          "of": {
+            "of": [],
+            "type": "any"
+          },
+          "type": "set"
+        },
+        "type": "function"
+      },
+      "relation": false
+    },
+    "io.jwt.decode": {
+      "name": "io.jwt.decode",
+      "infix": "",
+      "decl": {
+        "args": [
+          {
+            "type": "string"
+          }
+        ],
+        "result": {
+          "static": [
+            {
+              "dynamic": {
+                "key": {
+                  "of": [],
+                  "type": "any"
+                },
+                "value": {
+                  "of": [],
+                  "type": "any"
+                }
+              },
+              "type": "object"
+            },
+            {
+              "dynamic": {
+                "key": {
+                  "of": [],
+                  "type": "any"
+                },
+                "value": {
+                  "of": [],
+                  "type": "any"
+                }
+              },
+              "type": "object"
+            },
+            {
+              "type": "string"
+            }
+          ],
+          "type": "array"
+        },
+        "type": "function"
+      },
+      "relation": false
+    },
+    "io.jwt.decode_verify": {
+      "name": "io.jwt.decode_verify",
+      "infix": "",
+      "decl": {
+        "args": [
+          {
+            "type": "string"
+          },
+          {
+            "dynamic": {
+              "key": {
+                "type": "string"
+              },
+              "value": {
+                "of": [],
+                "type": "any"
+              }
+            },
+            "type": "object"
+          }
+        ],
+        "result": {
+          "static": [
+            {
+              "type": "boolean"
+            },
+            {
+              "dynamic": {
+                "key": {
+                  "of": [],
+                  "type": "any"
+                },
+                "value": {
+                  "of": [],
+                  "type": "any"
+                }
+              },
+              "type": "object"
+            },
+            {
+              "dynamic": {
+                "key": {
+                  "of": [],
+                  "type": "any"
+                },
+                "value": {
+                  "of": [],
+                  "type": "any"
+                }
+              },
+              "type": "object"
+            }
+          ],
+          "type": "array"
+        },
+        "type": "function"
+      },
+      "relation": false
+    },
+    "io.jwt.encode_sign": {
+      "name": "io.jwt.encode_sign",
+      "infix": "",
+      "decl": {
+        "args": [
+          {
+            "dynamic": {
+              "key": {
+                "type": "string"
+              },
+              "value": {
+                "of": [],
+                "type": "any"
+              }
+            },
+            "type": "object"
+          },
+          {
+            "dynamic": {
+              "key": {
+                "type": "string"
+              },
+              "value": {
+                "of": [],
+                "type": "any"
+              }
+            },
+            "type": "object"
+          },
+          {
+            "dynamic": {
+              "key": {
+                "type": "string"
+              },
+              "value": {
+                "of": [],
+                "type": "any"
+              }
+            },
+            "type": "object"
+          }
+        ],
+        "result": {
+          "type": "string"
+        },
+        "type": "function"
+      },
+      "relation": false
+    },
+    "io.jwt.encode_sign_raw": {
+      "name": "io.jwt.encode_sign_raw",
+      "infix": "",
+      "decl": {
+        "args": [
+          {
+            "type": "string"
+          },
+          {
+            "type": "string"
+          },
+          {
+            "type": "string"
+          }
+        ],
+        "result": {
+          "type": "string"
+        },
+        "type": "function"
+      },
+      "relation": false
+    },
+    "io.jwt.verify_es256": {
+      "name": "io.jwt.verify_es256",
+      "infix": "",
+      "decl": {
+        "args": [
+          {
+            "type": "string"
+          },
+          {
+            "type": "string"
+          }
+        ],
+        "result": {
+          "type": "boolean"
+        },
+        "type": "function"
+      },
+      "relation": false
+    },
+    "io.jwt.verify_es384": {
+      "name": "io.jwt.verify_es384",
+      "infix": "",
+      "decl": {
+        "args": [
+          {
+            "type": "string"
+          },
+          {
+            "type": "string"
+          }
+        ],
+        "result": {
+          "type": "boolean"
+        },
+        "type": "function"
+      },
+      "relation": false
+    },
+    "io.jwt.verify_es512": {
+      "name": "io.jwt.verify_es512",
+      "infix": "",
+      "decl": {
+        "args": [
+          {
+            "type": "string"
+          },
+          {
+            "type": "string"
+          }
+        ],
+        "result": {
+          "type": "boolean"
+        },
+        "type": "function"
+      },
+      "relation": false
+    },
+    "io.jwt.verify_hs256": {
+      "name": "io.jwt.verify_hs256",
+      "infix": "",
+      "decl": {
+        "args": [
+          {
+            "type": "string"
+          },
+          {
+            "type": "string"
+          }
+        ],
+        "result": {
+          "type": "boolean"
+        },
+        "type": "function"
+      },
+      "relation": false
+    },
+    "io.jwt.verify_hs384": {
+      "name": "io.jwt.verify_hs384",
+      "infix": "",
+      "decl": {
+        "args": [
+          {
+            "type": "string"
+          },
+          {
+            "type": "string"
+          }
+        ],
+        "result": {
+          "type": "boolean"
+        },
+        "type": "function"
+      },
+      "relation": false
+    },
+    "io.jwt.verify_hs512": {
+      "name": "io.jwt.verify_hs512",
+      "infix": "",
+      "decl": {
+        "args": [
+          {
+            "type": "string"
+          },
+          {
+            "type": "string"
+          }
+        ],
+        "result": {
+          "type": "boolean"
+        },
+        "type": "function"
+      },
+      "relation": false
+    },
+    "io.jwt.verify_ps256": {
+      "name": "io.jwt.verify_ps256",
+      "infix": "",
+      "decl": {
+        "args": [
+          {
+            "type": "string"
+          },
+          {
+            "type": "string"
+          }
+        ],
+        "result": {
+          "type": "boolean"
+        },
+        "type": "function"
+      },
+      "relation": false
+    },
+    "io.jwt.verify_ps384": {
+      "name": "io.jwt.verify_ps384",
+      "infix": "",
+      "decl": {
+        "args": [
+          {
+            "type": "string"
+          },
+          {
+            "type": "string"
+          }
+        ],
+        "result": {
+          "type": "boolean"
+        },
+        "type": "function"
+      },
+      "relation": false
+    },
+    "io.jwt.verify_ps512": {
+      "name": "io.jwt.verify_ps512",
+      "infix": "",
+      "decl": {
+        "args": [
+          {
+            "type": "string"
+          },
+          {
+            "type": "string"
+          }
+        ],
+        "result": {
+          "type": "boolean"
+        },
+        "type": "function"
+      },
+      "relation": false
+    },
+    "io.jwt.verify_rs256": {
+      "name": "io.jwt.verify_rs256",
+      "infix": "",
+      "decl": {
+        "args": [
+          {
+            "type": "string"
+          },
+          {
+            "type": "string"
+          }
+        ],
+        "result": {
+          "type": "boolean"
+        },
+        "type": "function"
+      },
+      "relation": false
+    },
+    "io.jwt.verify_rs384": {
+      "name": "io.jwt.verify_rs384",
+      "infix": "",
+      "decl": {
+        "args": [
+          {
+            "type": "string"
+          },
+          {
+            "type": "string"
+          }
+        ],
+        "result": {
+          "type": "boolean"
+        },
+        "type": "function"
+      },
+      "relation": false
+    },
+    "io.jwt.verify_rs512": {
+      "name": "io.jwt.verify_rs512",
+      "infix": "",
+      "decl": {
+        "args": [
+          {
+            "type": "string"
+          },
+          {
+            "type": "string"
+          }
+        ],
+        "result": {
+          "type": "boolean"
+        },
+        "type": "function"
+      },
+      "relation": false
+    },
+    "is_array": {
+      "name": "is_array",
+      "infix": "",
+      "decl": {
+        "args": [
+          {
+            "of": [],
+            "type": "any"
+          }
+        ],
+        "result": {
+          "type": "boolean"
+        },
+        "type": "function"
+      },
+      "relation": false
+    },
+    "is_boolean": {
+      "name": "is_boolean",
+      "infix": "",
+      "decl": {
+        "args": [
+          {
+            "of": [],
+            "type": "any"
+          }
+        ],
+        "result": {
+          "type": "boolean"
+        },
+        "type": "function"
+      },
+      "relation": false
+    },
+    "is_null": {
+      "name": "is_null",
+      "infix": "",
+      "decl": {
+        "args": [
+          {
+            "of": [],
+            "type": "any"
+          }
+        ],
+        "result": {
+          "type": "boolean"
+        },
+        "type": "function"
+      },
+      "relation": false
+    },
+    "is_number": {
+      "name": "is_number",
+      "infix": "",
+      "decl": {
+        "args": [
+          {
+            "of": [],
+            "type": "any"
+          }
+        ],
+        "result": {
+          "type": "boolean"
+        },
+        "type": "function"
+      },
+      "relation": false
+    },
+    "is_object": {
+      "name": "is_object",
+      "infix": "",
+      "decl": {
+        "args": [
+          {
+            "of": [],
+            "type": "any"
+          }
+        ],
+        "result": {
+          "type": "boolean"
+        },
+        "type": "function"
+      },
+      "relation": false
+    },
+    "is_set": {
+      "name": "is_set",
+      "infix": "",
+      "decl": {
+        "args": [
+          {
+            "of": [],
+            "type": "any"
+          }
+        ],
+        "result": {
+          "type": "boolean"
+        },
+        "type": "function"
+      },
+      "relation": false
+    },
+    "is_string": {
+      "name": "is_string",
+      "infix": "",
+      "decl": {
+        "args": [
+          {
+            "of": [],
+            "type": "any"
+          }
+        ],
+        "result": {
+          "type": "boolean"
+        },
+        "type": "function"
+      },
+      "relation": false
+    },
+    "json.filter": {
+      "name": "json.filter",
+      "infix": "",
+      "decl": {
+        "args": [
+          {
+            "dynamic": {
+              "key": {
+                "of": [],
+                "type": "any"
+              },
+              "value": {
+                "of": [],
+                "type": "any"
+              }
+            },
+            "type": "object"
+          },
+          {
+            "of": [
+              {
+                "dynamic": {
+                  "of": [
+                    {
+                      "type": "string"
+                    },
+                    {
+                      "dynamic": {
+                        "of": [],
+                        "type": "any"
+                      },
+                      "type": "array"
+                    }
+                  ],
+                  "type": "any"
+                },
+                "type": "array"
+              },
+              {
+                "of": {
+                  "of": [
+                    {
+                      "type": "string"
+                    },
+                    {
+                      "dynamic": {
+                        "of": [],
+                        "type": "any"
+                      },
+                      "type": "array"
+                    }
+                  ],
+                  "type": "any"
+                },
+                "type": "set"
+              }
+            ],
+            "type": "any"
+          }
+        ],
+        "result": {
+          "of": [],
+          "type": "any"
+        },
+        "type": "function"
+      },
+      "relation": false
+    },
+    "json.marshal": {
+      "name": "json.marshal",
+      "infix": "",
+      "decl": {
+        "args": [
+          {
+            "of": [],
+            "type": "any"
+          }
+        ],
+        "result": {
+          "type": "string"
+        },
+        "type": "function"
+      },
+      "relation": false
+    },
+    "json.remove": {
+      "name": "json.remove",
+      "infix": "",
+      "decl": {
+        "args": [
+          {
+            "dynamic": {
+              "key": {
+                "of": [],
+                "type": "any"
+              },
+              "value": {
+                "of": [],
+                "type": "any"
+              }
+            },
+            "type": "object"
+          },
+          {
+            "of": [
+              {
+                "dynamic": {
+                  "of": [
+                    {
+                      "type": "string"
+                    },
+                    {
+                      "dynamic": {
+                        "of": [],
+                        "type": "any"
+                      },
+                      "type": "array"
+                    }
+                  ],
+                  "type": "any"
+                },
+                "type": "array"
+              },
+              {
+                "of": {
+                  "of": [
+                    {
+                      "type": "string"
+                    },
+                    {
+                      "dynamic": {
+                        "of": [],
+                        "type": "any"
+                      },
+                      "type": "array"
+                    }
+                  ],
+                  "type": "any"
+                },
+                "type": "set"
+              }
+            ],
+            "type": "any"
+          }
+        ],
+        "result": {
+          "of": [],
+          "type": "any"
+        },
+        "type": "function"
+      },
+      "relation": false
+    },
+    "json.unmarshal": {
+      "name": "json.unmarshal",
+      "infix": "",
+      "decl": {
+        "args": [
+          {
+            "type": "string"
+          }
+        ],
+        "result": {
+          "of": [],
+          "type": "any"
+        },
+        "type": "function"
+      },
+      "relation": false
+    },
+    "lower": {
+      "name": "lower",
+      "infix": "",
+      "decl": {
+        "args": [
+          {
+            "type": "string"
+          }
+        ],
+        "result": {
+          "type": "string"
+        },
+        "type": "function"
+      },
+      "relation": false
+    },
+    "lt": {
+      "name": "lt",
+      "infix": "\u003c",
+      "decl": {
+        "args": [
+          {
+            "of": [],
+            "type": "any"
+          },
+          {
+            "of": [],
+            "type": "any"
+          }
+        ],
+        "result": {
+          "type": "boolean"
+        },
+        "type": "function"
+      },
+      "relation": false
+    },
+    "lte": {
+      "name": "lte",
+      "infix": "\u003c=",
+      "decl": {
+        "args": [
+          {
+            "of": [],
+            "type": "any"
+          },
+          {
+            "of": [],
+            "type": "any"
+          }
+        ],
+        "result": {
+          "type": "boolean"
+        },
+        "type": "function"
+      },
+      "relation": false
+    },
+    "max": {
+      "name": "max",
+      "infix": "",
+      "decl": {
+        "args": [
+          {
+            "of": [
+              {
+                "of": {
+                  "of": [],
+                  "type": "any"
+                },
+                "type": "set"
+              },
+              {
+                "dynamic": {
+                  "of": [],
+                  "type": "any"
+                },
+                "type": "array"
+              }
+            ],
+            "type": "any"
+          }
+        ],
+        "result": {
+          "of": [],
+          "type": "any"
+        },
+        "type": "function"
+      },
+      "relation": false
+    },
+    "min": {
+      "name": "min",
+      "infix": "",
+      "decl": {
+        "args": [
+          {
+            "of": [
+              {
+                "of": {
+                  "of": [],
+                  "type": "any"
+                },
+                "type": "set"
+              },
+              {
+                "dynamic": {
+                  "of": [],
+                  "type": "any"
+                },
+                "type": "array"
+              }
+            ],
+            "type": "any"
+          }
+        ],
+        "result": {
+          "of": [],
+          "type": "any"
+        },
+        "type": "function"
+      },
+      "relation": false
+    },
+    "minus": {
+      "name": "minus",
+      "infix": "-",
+      "decl": {
+        "args": [
+          {
+            "of": [
+              {
+                "type": "number"
+              },
+              {
+                "of": {
+                  "of": [],
+                  "type": "any"
+                },
+                "type": "set"
+              }
+            ],
+            "type": "any"
+          },
+          {
+            "of": [
+              {
+                "type": "number"
+              },
+              {
+                "of": {
+                  "of": [],
+                  "type": "any"
+                },
+                "type": "set"
+              }
+            ],
+            "type": "any"
+          }
+        ],
+        "result": {
+          "of": [
+            {
+              "type": "number"
+            },
+            {
+              "of": {
+                "of": [],
+                "type": "any"
+              },
+              "type": "set"
+            }
+          ],
+          "type": "any"
+        },
+        "type": "function"
+      },
+      "relation": false
+    },
+    "mul": {
+      "name": "mul",
+      "infix": "*",
+      "decl": {
+        "args": [
+          {
+            "type": "number"
+          },
+          {
+            "type": "number"
+          }
+        ],
+        "result": {
+          "type": "number"
+        },
+        "type": "function"
+      },
+      "relation": false
+    },
+    "neq": {
+      "name": "neq",
+      "infix": "!=",
+      "decl": {
+        "args": [
+          {
+            "of": [],
+            "type": "any"
+          },
+          {
+            "of": [],
+            "type": "any"
+          }
+        ],
+        "result": {
+          "type": "boolean"
+        },
+        "type": "function"
+      },
+      "relation": false
+    },
+    "net.cidr_contains": {
+      "name": "net.cidr_contains",
+      "infix": "",
+      "decl": {
+        "args": [
+          {
+            "type": "string"
+          },
+          {
+            "type": "string"
+          }
+        ],
+        "result": {
+          "type": "boolean"
+        },
+        "type": "function"
+      },
+      "relation": false
+    },
+    "net.cidr_contains_matches": {
+      "name": "net.cidr_contains_matches",
+      "infix": "",
+      "decl": {
+        "args": [
+          {
+            "of": [
+              {
+                "type": "string"
+              },
+              {
+                "dynamic": {
+                  "of": [
+                    {
+                      "type": "string"
+                    },
+                    {
+                      "dynamic": {
+                        "of": [],
+                        "type": "any"
+                      },
+                      "type": "array"
+                    }
+                  ],
+                  "type": "any"
+                },
+                "type": "array"
+              },
+              {
+                "of": {
+                  "of": [
+                    {
+                      "type": "string"
+                    },
+                    {
+                      "dynamic": {
+                        "of": [],
+                        "type": "any"
+                      },
+                      "type": "array"
+                    }
+                  ],
+                  "type": "any"
+                },
+                "type": "set"
+              },
+              {
+                "dynamic": {
+                  "key": {
+                    "type": "string"
+                  },
+                  "value": {
+                    "of": [
+                      {
+                        "type": "string"
+                      },
+                      {
+                        "dynamic": {
+                          "of": [],
+                          "type": "any"
+                        },
+                        "type": "array"
+                      }
+                    ],
+                    "type": "any"
+                  }
+                },
+                "type": "object"
+              }
+            ],
+            "type": "any"
+          },
+          {
+            "of": [
+              {
+                "type": "string"
+              },
+              {
+                "dynamic": {
+                  "of": [
+                    {
+                      "type": "string"
+                    },
+                    {
+                      "dynamic": {
+                        "of": [],
+                        "type": "any"
+                      },
+                      "type": "array"
+                    }
+                  ],
+                  "type": "any"
+                },
+                "type": "array"
+              },
+              {
+                "of": {
+                  "of": [
+                    {
+                      "type": "string"
+                    },
+                    {
+                      "dynamic": {
+                        "of": [],
+                        "type": "any"
+                      },
+                      "type": "array"
+                    }
+                  ],
+                  "type": "any"
+                },
+                "type": "set"
+              },
+              {
+                "dynamic": {
+                  "key": {
+                    "type": "string"
+                  },
+                  "value": {
+                    "of": [
+                      {
+                        "type": "string"
+                      },
+                      {
+                        "dynamic": {
+                          "of": [],
+                          "type": "any"
+                        },
+                        "type": "array"
+                      }
+                    ],
+                    "type": "any"
+                  }
+                },
+                "type": "object"
+              }
+            ],
+            "type": "any"
+          }
+        ],
+        "result": {
+          "of": {
+            "static": [
+              {
+                "of": [],
+                "type": "any"
+              },
+              {
+                "of": [],
+                "type": "any"
+              }
+            ],
+            "type": "array"
+          },
+          "type": "set"
+        },
+        "type": "function"
+      },
+      "relation": false
+    },
+    "net.cidr_expand": {
+      "name": "net.cidr_expand",
+      "infix": "",
+      "decl": {
+        "args": [
+          {
+            "type": "string"
+          }
+        ],
+        "result": {
+          "of": {
+            "type": "string"
+          },
+          "type": "set"
+        },
+        "type": "function"
+      },
+      "relation": false
+    },
+    "net.cidr_intersects": {
+      "name": "net.cidr_intersects",
+      "infix": "",
+      "decl": {
+        "args": [
+          {
+            "type": "string"
+          },
+          {
+            "type": "string"
+          }
+        ],
+        "result": {
+          "type": "boolean"
+        },
+        "type": "function"
+      },
+      "relation": false
+    },
+    "net.cidr_overlap": {
+      "name": "net.cidr_overlap",
+      "infix": "",
+      "decl": {
+        "args": [
+          {
+            "type": "string"
+          },
+          {
+            "type": "string"
+          }
+        ],
+        "result": {
+          "type": "boolean"
+        },
+        "type": "function"
+      },
+      "relation": false
+    },
+    "object.filter": {
+      "name": "object.filter",
+      "infix": "",
+      "decl": {
+        "args": [
+          {
+            "dynamic": {
+              "key": {
+                "of": [],
+                "type": "any"
+              },
+              "value": {
+                "of": [],
+                "type": "any"
+              }
+            },
+            "type": "object"
+          },
+          {
+            "of": [
+              {
+                "dynamic": {
+                  "of": [],
+                  "type": "any"
+                },
+                "type": "array"
+              },
+              {
+                "of": {
+                  "of": [],
+                  "type": "any"
+                },
+                "type": "set"
+              },
+              {
+                "dynamic": {
+                  "key": {
+                    "of": [],
+                    "type": "any"
+                  },
+                  "value": {
+                    "of": [],
+                    "type": "any"
+                  }
+                },
+                "type": "object"
+              }
+            ],
+            "type": "any"
+          }
+        ],
+        "result": {
+          "of": [],
+          "type": "any"
+        },
+        "type": "function"
+      },
+      "relation": false
+    },
+    "object.get": {
+      "name": "object.get",
+      "infix": "",
+      "decl": {
+        "args": [
+          {
+            "dynamic": {
+              "key": {
+                "of": [],
+                "type": "any"
+              },
+              "value": {
+                "of": [],
+                "type": "any"
+              }
+            },
+            "type": "object"
+          },
+          {
+            "of": [],
+            "type": "any"
+          },
+          {
+            "of": [],
+            "type": "any"
+          }
+        ],
+        "result": {
+          "of": [],
+          "type": "any"
+        },
+        "type": "function"
+      },
+      "relation": false
+    },
+    "object.remove": {
+      "name": "object.remove",
+      "infix": "",
+      "decl": {
+        "args": [
+          {
+            "dynamic": {
+              "key": {
+                "of": [],
+                "type": "any"
+              },
+              "value": {
+                "of": [],
+                "type": "any"
+              }
+            },
+            "type": "object"
+          },
+          {
+            "of": [
+              {
+                "dynamic": {
+                  "of": [],
+                  "type": "any"
+                },
+                "type": "array"
+              },
+              {
+                "of": {
+                  "of": [],
+                  "type": "any"
+                },
+                "type": "set"
+              },
+              {
+                "dynamic": {
+                  "key": {
+                    "of": [],
+                    "type": "any"
+                  },
+                  "value": {
+                    "of": [],
+                    "type": "any"
+                  }
+                },
+                "type": "object"
+              }
+            ],
+            "type": "any"
+          }
+        ],
+        "result": {
+          "of": [],
+          "type": "any"
+        },
+        "type": "function"
+      },
+      "relation": false
+    },
+    "object.union": {
+      "name": "object.union",
+      "infix": "",
+      "decl": {
+        "args": [
+          {
+            "dynamic": {
+              "key": {
+                "of": [],
+                "type": "any"
+              },
+              "value": {
+                "of": [],
+                "type": "any"
+              }
+            },
+            "type": "object"
+          },
+          {
+            "dynamic": {
+              "key": {
+                "of": [],
+                "type": "any"
+              },
+              "value": {
+                "of": [],
+                "type": "any"
+              }
+            },
+            "type": "object"
+          }
+        ],
+        "result": {
+          "of": [],
+          "type": "any"
+        },
+        "type": "function"
+      },
+      "relation": false
+    },
+    "opa.runtime": {
+      "name": "opa.runtime",
+      "infix": "",
+      "decl": {
+        "result": {
+          "dynamic": {
+            "key": {
+              "type": "string"
+            },
+            "value": {
+              "of": [],
+              "type": "any"
+            }
+          },
+          "type": "object"
+        },
+        "type": "function"
+      },
+      "relation": false
+    },
+    "or": {
+      "name": "or",
+      "infix": "|",
+      "decl": {
+        "args": [
+          {
+            "of": {
+              "of": [],
+              "type": "any"
+            },
+            "type": "set"
+          },
+          {
+            "of": {
+              "of": [],
+              "type": "any"
+            },
+            "type": "set"
+          }
+        ],
+        "result": {
+          "of": {
+            "of": [],
+            "type": "any"
+          },
+          "type": "set"
+        },
+        "type": "function"
+      },
+      "relation": false
+    },
+    "plus": {
+      "name": "plus",
+      "infix": "+",
+      "decl": {
+        "args": [
+          {
+            "type": "number"
+          },
+          {
+            "type": "number"
+          }
+        ],
+        "result": {
+          "type": "number"
+        },
+        "type": "function"
+      },
+      "relation": false
+    },
+    "product": {
+      "name": "product",
+      "infix": "",
+      "decl": {
+        "args": [
+          {
+            "of": [
+              {
+                "of": {
+                  "type": "number"
+                },
+                "type": "set"
+              },
+              {
+                "dynamic": {
+                  "type": "number"
+                },
+                "type": "array"
+              }
+            ],
+            "type": "any"
+          }
+        ],
+        "result": {
+          "type": "number"
+        },
+        "type": "function"
+      },
+      "relation": false
+    },
+    "re_match": {
+      "name": "re_match",
+      "infix": "",
+      "decl": {
+        "args": [
+          {
+            "type": "string"
+          },
+          {
+            "type": "string"
+          }
+        ],
+        "result": {
+          "type": "boolean"
+        },
+        "type": "function"
+      },
+      "relation": false
+    },
+    "regex.find_all_string_submatch_n": {
+      "name": "regex.find_all_string_submatch_n",
+      "infix": "",
+      "decl": {
+        "args": [
+          {
+            "type": "string"
+          },
+          {
+            "type": "string"
+          },
+          {
+            "type": "number"
+          }
+        ],
+        "result": {
+          "dynamic": {
+            "dynamic": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "type": "array"
+        },
+        "type": "function"
+      },
+      "relation": false
+    },
+    "regex.find_n": {
+      "name": "regex.find_n",
+      "infix": "",
+      "decl": {
+        "args": [
+          {
+            "type": "string"
+          },
+          {
+            "type": "string"
+          },
+          {
+            "type": "number"
+          }
+        ],
+        "result": {
+          "dynamic": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "type": "function"
+      },
+      "relation": false
+    },
+    "regex.globs_match": {
+      "name": "regex.globs_match",
+      "infix": "",
+      "decl": {
+        "args": [
+          {
+            "type": "string"
+          },
+          {
+            "type": "string"
+          }
+        ],
+        "result": {
+          "type": "boolean"
+        },
+        "type": "function"
+      },
+      "relation": false
+    },
+    "regex.split": {
+      "name": "regex.split",
+      "infix": "",
+      "decl": {
+        "args": [
+          {
+            "type": "string"
+          },
+          {
+            "type": "string"
+          }
+        ],
+        "result": {
+          "dynamic": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "type": "function"
+      },
+      "relation": false
+    },
+    "regex.template_match": {
+      "name": "regex.template_match",
+      "infix": "",
+      "decl": {
+        "args": [
+          {
+            "type": "string"
+          },
+          {
+            "type": "string"
+          },
+          {
+            "type": "string"
+          },
+          {
+            "type": "string"
+          }
+        ],
+        "result": {
+          "type": "boolean"
+        },
+        "type": "function"
+      },
+      "relation": false
+    },
+    "rego.parse_module": {
+      "name": "rego.parse_module",
+      "infix": "",
+      "decl": {
+        "args": [
+          {
+            "type": "string"
+          },
+          {
+            "type": "string"
+          }
+        ],
+        "result": {
+          "dynamic": {
+            "key": {
+              "type": "string"
+            },
+            "value": {
+              "of": [],
+              "type": "any"
+            }
+          },
+          "type": "object"
+        },
+        "type": "function"
+      },
+      "relation": false
+    },
+    "rem": {
+      "name": "rem",
+      "infix": "%",
+      "decl": {
+        "args": [
+          {
+            "type": "number"
+          },
+          {
+            "type": "number"
+          }
+        ],
+        "result": {
+          "type": "number"
+        },
+        "type": "function"
+      },
+      "relation": false
+    },
+    "replace": {
+      "name": "replace",
+      "infix": "",
+      "decl": {
+        "args": [
+          {
+            "type": "string"
+          },
+          {
+            "type": "string"
+          },
+          {
+            "type": "string"
+          }
+        ],
+        "result": {
+          "type": "string"
+        },
+        "type": "function"
+      },
+      "relation": false
+    },
+    "round": {
+      "name": "round",
+      "infix": "",
+      "decl": {
+        "args": [
+          {
+            "type": "number"
+          }
+        ],
+        "result": {
+          "type": "number"
+        },
+        "type": "function"
+      },
+      "relation": false
+    },
+    "set_diff": {
+      "name": "set_diff",
+      "infix": "",
+      "decl": {
+        "args": [
+          {
+            "of": {
+              "of": [],
+              "type": "any"
+            },
+            "type": "set"
+          },
+          {
+            "of": {
+              "of": [],
+              "type": "any"
+            },
+            "type": "set"
+          }
+        ],
+        "result": {
+          "of": {
+            "of": [],
+            "type": "any"
+          },
+          "type": "set"
+        },
+        "type": "function"
+      },
+      "relation": false
+    },
+    "sort": {
+      "name": "sort",
+      "infix": "",
+      "decl": {
+        "args": [
+          {
+            "of": [
+              {
+                "dynamic": {
+                  "of": [],
+                  "type": "any"
+                },
+                "type": "array"
+              },
+              {
+                "of": {
+                  "of": [],
+                  "type": "any"
+                },
+                "type": "set"
+              }
+            ],
+            "type": "any"
+          }
+        ],
+        "result": {
+          "dynamic": {
+            "of": [],
+            "type": "any"
+          },
+          "type": "array"
+        },
+        "type": "function"
+      },
+      "relation": false
+    },
+    "split": {
+      "name": "split",
+      "infix": "",
+      "decl": {
+        "args": [
+          {
+            "type": "string"
+          },
+          {
+            "type": "string"
+          }
+        ],
+        "result": {
+          "dynamic": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "type": "function"
+      },
+      "relation": false
+    },
+    "sprintf": {
+      "name": "sprintf",
+      "infix": "",
+      "decl": {
+        "args": [
+          {
+            "type": "string"
+          },
+          {
+            "dynamic": {
+              "of": [],
+              "type": "any"
+            },
+            "type": "array"
+          }
+        ],
+        "result": {
+          "type": "string"
+        },
+        "type": "function"
+      },
+      "relation": false
+    },
+    "startswith": {
+      "name": "startswith",
+      "infix": "",
+      "decl": {
+        "args": [
+          {
+            "type": "string"
+          },
+          {
+            "type": "string"
+          }
+        ],
+        "result": {
+          "type": "boolean"
+        },
+        "type": "function"
+      },
+      "relation": false
+    },
+    "strings.replace_n": {
+      "name": "strings.replace_n",
+      "infix": "",
+      "decl": {
+        "args": [
+          {
+            "dynamic": {
+              "key": {
+                "type": "string"
+              },
+              "value": {
+                "type": "string"
+              }
+            },
+            "type": "object"
+          },
+          {
+            "type": "string"
+          }
+        ],
+        "result": {
+          "type": "string"
+        },
+        "type": "function"
+      },
+      "relation": false
+    },
+    "substring": {
+      "name": "substring",
+      "infix": "",
+      "decl": {
+        "args": [
+          {
+            "type": "string"
+          },
+          {
+            "type": "number"
+          },
+          {
+            "type": "number"
+          }
+        ],
+        "result": {
+          "type": "string"
+        },
+        "type": "function"
+      },
+      "relation": false
+    },
+    "sum": {
+      "name": "sum",
+      "infix": "",
+      "decl": {
+        "args": [
+          {
+            "of": [
+              {
+                "of": {
+                  "type": "number"
+                },
+                "type": "set"
+              },
+              {
+                "dynamic": {
+                  "type": "number"
+                },
+                "type": "array"
+              }
+            ],
+            "type": "any"
+          }
+        ],
+        "result": {
+          "type": "number"
+        },
+        "type": "function"
+      },
+      "relation": false
+    },
+    "time.add_date": {
+      "name": "time.add_date",
+      "infix": "",
+      "decl": {
+        "args": [
+          {
+            "type": "number"
+          },
+          {
+            "type": "number"
+          },
+          {
+            "type": "number"
+          },
+          {
+            "type": "number"
+          }
+        ],
+        "result": {
+          "type": "number"
+        },
+        "type": "function"
+      },
+      "relation": false
+    },
+    "time.clock": {
+      "name": "time.clock",
+      "infix": "",
+      "decl": {
+        "args": [
+          {
+            "of": [
+              {
+                "type": "number"
+              },
+              {
+                "static": [
+                  {
+                    "type": "number"
+                  },
+                  {
+                    "type": "string"
+                  }
+                ],
+                "type": "array"
+              }
+            ],
+            "type": "any"
+          }
+        ],
+        "result": {
+          "static": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "number"
+            },
+            {
+              "type": "number"
+            }
+          ],
+          "type": "array"
+        },
+        "type": "function"
+      },
+      "relation": false
+    },
+    "time.date": {
+      "name": "time.date",
+      "infix": "",
+      "decl": {
+        "args": [
+          {
+            "of": [
+              {
+                "type": "number"
+              },
+              {
+                "static": [
+                  {
+                    "type": "number"
+                  },
+                  {
+                    "type": "string"
+                  }
+                ],
+                "type": "array"
+              }
+            ],
+            "type": "any"
+          }
+        ],
+        "result": {
+          "static": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "number"
+            },
+            {
+              "type": "number"
+            }
+          ],
+          "type": "array"
+        },
+        "type": "function"
+      },
+      "relation": false
+    },
+    "time.now_ns": {
+      "name": "time.now_ns",
+      "infix": "",
+      "decl": {
+        "result": {
+          "type": "number"
+        },
+        "type": "function"
+      },
+      "relation": false
+    },
+    "time.parse_duration_ns": {
+      "name": "time.parse_duration_ns",
+      "infix": "",
+      "decl": {
+        "args": [
+          {
+            "type": "string"
+          }
+        ],
+        "result": {
+          "type": "number"
+        },
+        "type": "function"
+      },
+      "relation": false
+    },
+    "time.parse_ns": {
+      "name": "time.parse_ns",
+      "infix": "",
+      "decl": {
+        "args": [
+          {
+            "type": "string"
+          },
+          {
+            "type": "string"
+          }
+        ],
+        "result": {
+          "type": "number"
+        },
+        "type": "function"
+      },
+      "relation": false
+    },
+    "time.parse_rfc3339_ns": {
+      "name": "time.parse_rfc3339_ns",
+      "infix": "",
+      "decl": {
+        "args": [
+          {
+            "type": "string"
+          }
+        ],
+        "result": {
+          "type": "number"
+        },
+        "type": "function"
+      },
+      "relation": false
+    },
+    "time.weekday": {
+      "name": "time.weekday",
+      "infix": "",
+      "decl": {
+        "args": [
+          {
+            "of": [
+              {
+                "type": "number"
+              },
+              {
+                "static": [
+                  {
+                    "type": "number"
+                  },
+                  {
+                    "type": "string"
+                  }
+                ],
+                "type": "array"
+              }
+            ],
+            "type": "any"
+          }
+        ],
+        "result": {
+          "type": "string"
+        },
+        "type": "function"
+      },
+      "relation": false
+    },
+    "to_number": {
+      "name": "to_number",
+      "infix": "",
+      "decl": {
+        "args": [
+          {
+            "of": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "string"
+              },
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "type": "any"
+          }
+        ],
+        "result": {
+          "type": "number"
+        },
+        "type": "function"
+      },
+      "relation": false
+    },
+    "trace": {
+      "name": "trace",
+      "infix": "",
+      "decl": {
+        "args": [
+          {
+            "type": "string"
+          }
+        ],
+        "result": {
+          "type": "boolean"
+        },
+        "type": "function"
+      },
+      "relation": false
+    },
+    "trim": {
+      "name": "trim",
+      "infix": "",
+      "decl": {
+        "args": [
+          {
+            "type": "string"
+          },
+          {
+            "type": "string"
+          }
+        ],
+        "result": {
+          "type": "string"
+        },
+        "type": "function"
+      },
+      "relation": false
+    },
+    "trim_left": {
+      "name": "trim_left",
+      "infix": "",
+      "decl": {
+        "args": [
+          {
+            "type": "string"
+          },
+          {
+            "type": "string"
+          }
+        ],
+        "result": {
+          "type": "string"
+        },
+        "type": "function"
+      },
+      "relation": false
+    },
+    "trim_prefix": {
+      "name": "trim_prefix",
+      "infix": "",
+      "decl": {
+        "args": [
+          {
+            "type": "string"
+          },
+          {
+            "type": "string"
+          }
+        ],
+        "result": {
+          "type": "string"
+        },
+        "type": "function"
+      },
+      "relation": false
+    },
+    "trim_right": {
+      "name": "trim_right",
+      "infix": "",
+      "decl": {
+        "args": [
+          {
+            "type": "string"
+          },
+          {
+            "type": "string"
+          }
+        ],
+        "result": {
+          "type": "string"
+        },
+        "type": "function"
+      },
+      "relation": false
+    },
+    "trim_space": {
+      "name": "trim_space",
+      "infix": "",
+      "decl": {
+        "args": [
+          {
+            "type": "string"
+          }
+        ],
+        "result": {
+          "type": "string"
+        },
+        "type": "function"
+      },
+      "relation": false
+    },
+    "trim_suffix": {
+      "name": "trim_suffix",
+      "infix": "",
+      "decl": {
+        "args": [
+          {
+            "type": "string"
+          },
+          {
+            "type": "string"
+          }
+        ],
+        "result": {
+          "type": "string"
+        },
+        "type": "function"
+      },
+      "relation": false
+    },
+    "type_name": {
+      "name": "type_name",
+      "infix": "",
+      "decl": {
+        "args": [
+          {
+            "of": [
+              {
+                "of": [],
+                "type": "any"
+              }
+            ],
+            "type": "any"
+          }
+        ],
+        "result": {
+          "type": "string"
+        },
+        "type": "function"
+      },
+      "relation": false
+    },
+    "union": {
+      "name": "union",
+      "infix": "",
+      "decl": {
+        "args": [
+          {
+            "of": {
+              "of": {
+                "of": [],
+                "type": "any"
+              },
+              "type": "set"
+            },
+            "type": "set"
+          }
+        ],
+        "result": {
+          "of": {
+            "of": [],
+            "type": "any"
+          },
+          "type": "set"
+        },
+        "type": "function"
+      },
+      "relation": false
+    },
+    "units.parse_bytes": {
+      "name": "units.parse_bytes",
+      "infix": "",
+      "decl": {
+        "args": [
+          {
+            "type": "string"
+          }
+        ],
+        "result": {
+          "type": "number"
+        },
+        "type": "function"
+      },
+      "relation": false
+    },
+    "upper": {
+      "name": "upper",
+      "infix": "",
+      "decl": {
+        "args": [
+          {
+            "type": "string"
+          }
+        ],
+        "result": {
+          "type": "string"
+        },
+        "type": "function"
+      },
+      "relation": false
+    },
+    "urlquery.decode": {
+      "name": "urlquery.decode",
+      "infix": "",
+      "decl": {
+        "args": [
+          {
+            "type": "string"
+          }
+        ],
+        "result": {
+          "type": "string"
+        },
+        "type": "function"
+      },
+      "relation": false
+    },
+    "urlquery.encode": {
+      "name": "urlquery.encode",
+      "infix": "",
+      "decl": {
+        "args": [
+          {
+            "type": "string"
+          }
+        ],
+        "result": {
+          "type": "string"
+        },
+        "type": "function"
+      },
+      "relation": false
+    },
+    "urlquery.encode_object": {
+      "name": "urlquery.encode_object",
+      "infix": "",
+      "decl": {
+        "args": [
+          {
+            "dynamic": {
+              "key": {
+                "type": "string"
+              },
+              "value": {
+                "of": [
+                  {
+                    "type": "string"
+                  },
+                  {
+                    "dynamic": {
+                      "type": "string"
+                    },
+                    "type": "array"
+                  },
+                  {
+                    "of": {
+                      "type": "string"
+                    },
+                    "type": "set"
+                  }
+                ],
+                "type": "any"
+              }
+            },
+            "type": "object"
+          }
+        ],
+        "result": {
+          "type": "string"
+        },
+        "type": "function"
+      },
+      "relation": false
+    },
+    "uuid.rfc4122": {
+      "name": "uuid.rfc4122",
+      "infix": "",
+      "decl": {
+        "args": [
+          {
+            "type": "string"
+          }
+        ],
+        "result": {
+          "type": "string"
+        },
+        "type": "function"
+      },
+      "relation": false
+    },
+    "walk": {
+      "name": "walk",
+      "infix": "",
+      "decl": {
+        "args": [
+          {
+            "of": [],
+            "type": "any"
+          }
+        ],
+        "result": {
+          "static": [
+            {
+              "dynamic": {
+                "of": [],
+                "type": "any"
+              },
+              "type": "array"
+            },
+            {
+              "of": [],
+              "type": "any"
+            }
+          ],
+          "type": "array"
+        },
+        "type": "function"
+      },
+      "relation": true
+    },
+    "yaml.marshal": {
+      "name": "yaml.marshal",
+      "infix": "",
+      "decl": {
+        "args": [
+          {
+            "of": [],
+            "type": "any"
+          }
+        ],
+        "result": {
+          "type": "string"
+        },
+        "type": "function"
+      },
+      "relation": false
+    },
+    "yaml.unmarshal": {
+      "name": "yaml.unmarshal",
+      "infix": "",
+      "decl": {
+        "args": [
+          {
+            "type": "string"
+          }
+        ],
+        "result": {
+          "of": [],
+          "type": "any"
+        },
+        "type": "function"
+      },
+      "relation": false
+    }
+  }
+}

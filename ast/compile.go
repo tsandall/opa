@@ -98,6 +98,7 @@ type Compiler struct {
 	builtins             map[string]*Builtin
 	unsafeBuiltinsMap    map[string]struct{}
 	comprehensionIndices map[*Term]*ComprehensionIndex
+	features             *Features
 }
 
 // CompilerStage defines the interface for stages in the compiler.
@@ -268,6 +269,14 @@ func NewCompiler() *Compiler {
 		{"BuildComprehensionIndices", "compile_stage_rebuild_comprehension_indices", c.buildComprehensionIndices},
 	}
 
+	return c
+}
+
+func (c *Compiler) WithSupportedFeatures(features *Features) *Compiler {
+	c.features = features
+	c.builtins = c.features.Builtins
+	checker := newTypeChecker()
+	c.TypeEnv = checker.checkLanguageBuiltins(nil, c.builtins)
 	return c
 }
 

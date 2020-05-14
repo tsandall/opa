@@ -245,8 +245,8 @@ func (p *StaticProperty) MarshalJSON() ([]byte, error) {
 
 // DynamicProperty represents a dynamic object property.
 type DynamicProperty struct {
-	Key   Type
-	Value Type
+	Key   Type `json:"key"`
+	Value Type `json:"value"`
 }
 
 // NewDynamicProperty returns a new DynamicProperty object.
@@ -486,6 +486,22 @@ func (t *Function) MarshalJSON() ([]byte, error) {
 		repr["result"] = t.result
 	}
 	return json.Marshal(repr)
+}
+
+func (t *Function) UnmarshalJSON(bs []byte) error {
+
+	tpe, err := Unmarshal(bs)
+	if err != nil {
+		return err
+	}
+
+	f, ok := tpe.(*Function)
+	if !ok {
+		return fmt.Errorf("invalid type")
+	}
+
+	*t = *f
+	return nil
 }
 
 // Union returns a new function represnting the union of t and other. Functions
