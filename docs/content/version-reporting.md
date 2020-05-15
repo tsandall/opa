@@ -13,7 +13,7 @@ version number (e.g., v0.12.3) and a randomly generated UUID. This feature is on
 `opa version` commands.
 
 In case of the `opa run` command, this feature is **ON by-default** and can be easily disabled by specifying
-the `--incognito` flag. When OPA is started in either the server or repl mode, OPA calls the external service
+the `--skip-version-check` flag. When OPA is started in either the server or repl mode, OPA calls the external service
 on a best-effort basis and shares the version it's running. The time taken to execute the remote call and process the
 subsequent response from the external service does not delay OPA's start-up.
 
@@ -64,8 +64,8 @@ to the OPA release notes.
 
 * OPA's anonymous version reporting feature provides users with up-to-date information about new OPA versions while
 still executing the familiar OPA `run` and `version` commands. It helps users stay abreast of OPA's latest capabilities
-and hence empowers them to make informed decisions while upgrading their OPA deployments. In the future, the OPA `run`
-and `version` commands could be enhanced to warn users if their OPA version is outside the upstream support window.
+and hence empowers them to make informed decisions while upgrading their OPA deployments. The OPA `run` and `version`
+commands could be enhanced to warn users if their OPA version is outside the upstream support window.
 
 * OPA maintainers and the [Cloud Native Computing Foundation](https://cncf.io) (CNCF) executive staff can use the version
 reports for obtaining more information about OPA usage and engagement. For example, the information can be used in making better

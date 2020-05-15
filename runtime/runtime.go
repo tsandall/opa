@@ -14,6 +14,7 @@ import (
 	"io"
 	"os"
 	"os/signal"
+	"strings"
 	"sync"
 	"syscall"
 	"time"
@@ -25,6 +26,7 @@ import (
 	"github.com/open-policy-agent/opa/ast"
 	"github.com/open-policy-agent/opa/internal/config"
 	"github.com/open-policy-agent/opa/internal/prometheus"
+	"github.com/open-policy-agent/opa/internal/report"
 	"github.com/open-policy-agent/opa/internal/runtime"
 	initload "github.com/open-policy-agent/opa/internal/runtime/init"
 	"github.com/open-policy-agent/opa/internal/uuid"
@@ -43,6 +45,11 @@ import (
 var (
 	registeredPlugins    map[string]plugins.Factory
 	registeredPluginsMux sync.Mutex
+)
+
+const (
+	// default interval between OPA version report uploads
+	defaultUploadIntervalSec = int64(3600)
 )
 
 // RegisterPlugin registers a plugin factory with the runtime
@@ -149,6 +156,10 @@ type Params struct {
 	// GracefulShutdownPeriod is the time (in seconds) to wait for the http
 	// server to shutdown gracefully.
 	GracefulShutdownPeriod int
+
+	// SkipVersionCheck flag controls whether OPA will report its version to an external service.
+	// If this flag is true, OPA will not report its version to the external service
+	SkipVersionCheck bool
 }
 
 // LoggingConfig stores the configuration for OPA's logging behaviour.
@@ -160,8 +171,9 @@ type LoggingConfig struct {
 // NewParams returns a new Params object.
 func NewParams() Params {
 	return Params{
-		Output:     os.Stdout,
-		BundleMode: false,
+		Output:           os.Stdout,
+		BundleMode:       false,
+		SkipVersionCheck: false,
 	}
 }
 
@@ -171,8 +183,11 @@ type Runtime struct {
 	Store   storage.Store
 	Manager *plugins.Manager
 
-	server  *server.Server
-	metrics *prometheus.Provider
+	server   *server.Server
+	metrics  *prometheus.Provider
+	reporter *report.Reporter
+
+	done chan struct{}
 }
 
 // NewRuntime returns a new Runtime object initialized with params. Clients must
@@ -190,6 +205,15 @@ func NewRuntime(ctx context.Context, params Params) (*Runtime, error) {
 	config, err := config.Load(params.ConfigFile, params.ConfigOverrides, params.ConfigOverrideFiles)
 	if err != nil {
 		return nil, errors.Wrap(err, "config error")
+	}
+
+	var reporter *report.Reporter
+	if !params.SkipVersionCheck {
+		var err error
+		reporter, err = report.New(params.ID)
+		if err != nil {
+			return nil, errors.Wrap(err, "config error")
+		}
 	}
 
 	loaded, err := initload.LoadPaths(params.Paths, params.Filter, params.BundleMode)
@@ -221,10 +245,11 @@ func NewRuntime(ctx context.Context, params Params) (*Runtime, error) {
 	manager.Register("discovery", disco)
 
 	rt := &Runtime{
-		Store:   manager.Store,
-		Params:  params,
-		Manager: manager,
-		metrics: metrics,
+		Store:    manager.Store,
+		Params:   params,
+		Manager:  manager,
+		metrics:  metrics,
+		reporter: reporter,
 	}
 
 	return rt, nil
@@ -300,6 +325,18 @@ func (rt *Runtime) Serve(ctx context.Context) error {
 		}
 	}
 
+	if !rt.Params.SkipVersionCheck {
+		d := time.Duration(int64(time.Second) * defaultUploadIntervalSec)
+		rt.done = make(chan struct{})
+		go rt.checkOPAUpdateLoop(ctx, d, rt.done)
+	}
+
+	defer func() {
+		if rt.done != nil {
+			rt.done <- struct{}{}
+		}
+	}()
+
 	rt.server.Handler = NewLoggingHandler(rt.server.Handler)
 	rt.server.DiagnosticHandler = NewLoggingHandler(rt.server.DiagnosticHandler)
 
@@ -372,7 +409,58 @@ func (rt *Runtime) StartREPL(ctx context.Context) {
 		}
 	}
 
+	if !rt.Params.SkipVersionCheck {
+		go rt.checkOPAUpdate(ctx, nil)
+	}
 	repl.Loop(ctx)
+}
+
+func (rt *Runtime) checkOPAUpdate(ctx context.Context, done chan struct{}) {
+	defer func() {
+		if done != nil {
+			close(done)
+		}
+	}()
+
+	resp, err := rt.reporter.SendReport(ctx)
+	if err != nil {
+		return
+	}
+
+	banner := resp.Pretty()
+	if banner != "" {
+		fmt.Fprintln(rt.Params.Output, banner)
+		fmt.Fprintf(rt.Params.Output, "> ")
+	}
+	return
+}
+
+func (rt *Runtime) checkOPAUpdateLoop(ctx context.Context, uploadDuration time.Duration, done chan struct{}) {
+	ticker := time.NewTicker(uploadDuration)
+
+	for {
+		select {
+		case <-ticker.C:
+			resp, err := rt.reporter.SendReport(ctx)
+			if err != nil {
+				logrus.WithField("err", err).Debug("Unable to send OPA version report.")
+			} else {
+				if resp.Latest.Download == "" || resp.Latest.ReleaseNotes == "" {
+					logrus.Debugf("OPA is up-to-date. Current version %v", version.Version)
+				} else {
+					parts := strings.Split(resp.Latest.ReleaseNotes, "/")
+					latest := parts[len(parts)-1]
+					logrus.WithFields(logrus.Fields{
+						"download_opa":  resp.Latest.Download,
+						"release_notes": resp.Latest.ReleaseNotes,
+					}).Infof("OPA is out-of-date. Current version %v. Latest version %v", version.Version, latest)
+				}
+			}
+		case <-done:
+			ticker.Stop()
+			return
+		}
+	}
 }
 
 func (rt *Runtime) decisionIDFactory() string {
@@ -488,6 +576,7 @@ func (rt *Runtime) processWatcherUpdate(ctx context.Context, paths []string, rem
 
 func (rt *Runtime) getBanner() string {
 	var buf bytes.Buffer
+	fmt.Fprintln(&buf, "")
 	fmt.Fprintf(&buf, "OPA %v (commit %v, built at %v)\n", version.Version, version.Vcs, version.Timestamp)
 	fmt.Fprintf(&buf, "\n")
 	fmt.Fprintf(&buf, "Run 'help' to see a list of commands.\n")
