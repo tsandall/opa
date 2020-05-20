@@ -575,7 +575,6 @@ func (rt *Runtime) processWatcherUpdate(ctx context.Context, paths []string, rem
 
 func (rt *Runtime) getBanner() string {
 	var buf bytes.Buffer
-	fmt.Fprintln(&buf, "")
 	fmt.Fprintf(&buf, "OPA %v (commit %v, built at %v)\n", version.Version, version.Vcs, version.Timestamp)
 	fmt.Fprintf(&buf, "\n")
 	fmt.Fprintf(&buf, "Run 'help' to see a list of commands and check for updates.\n")
