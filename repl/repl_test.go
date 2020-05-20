@@ -320,22 +320,28 @@ func TestHelpWithOPAVersionReport(t *testing.T) {
 	repl := newRepl(store, &buffer)
 
 	// empty report
-	repl.SetOPAVersionReport("")
+	repl.SetOPAVersionReport(nil)
 	repl.OneShot(ctx, "help")
 
 	if strings.Contains(buffer.String(), "Latest OPA Release") {
 		t.Fatalf("Unexpected output from help: \"%v\"", buffer.String())
 	}
 
-	report := "Latest Upstream Version: 0.19.2\n" +
-		"Download: https://openpolicyagent.org/downloads/v0.19.2/opa_darwin_amd64\n" +
-		"Release Notes: https://github.com/open-policy-agent/opa/releases/tag/v0.19.2"
+	buffer.Reset()
 
-	repl.SetOPAVersionReport(report)
+	repl.SetOPAVersionReport([][2]string{
+		{"Latest Upstream Version", "0.19.2"},
+		{"Download", "https://openpolicyagent.org/downloads/v0.19.2/opa_darwin_amd64"},
+		{"Release Notes", "https://github.com/open-policy-agent/opa/releases/tag/v0.19.2"},
+	})
 	repl.OneShot(ctx, "help")
 
-	if !strings.Contains(buffer.String(), report) {
-		t.Fatalf("Expected output from help to contain: \"%v\" but got \"%v\"", report, buffer.String())
+	exp := `Latest Upstream Version : 0.19.2
+Download                : https://openpolicyagent.org/downloads/v0.19.2/opa_darwin_amd64
+Release Notes           : https://github.com/open-policy-agent/opa/releases/tag/v0.19.2`
+
+	if !strings.Contains(buffer.String(), exp) {
+		t.Fatalf("Expected output from help to contain: \"%v\" but got \"%v\"", exp, buffer.String())
 	}
 }
 

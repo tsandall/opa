@@ -58,7 +58,7 @@ type REPL struct {
 	undefinedDisabled bool
 	errLimit          int
 	prettyLimit       int
-	report            string
+	report            [][2]string
 	mtx               sync.Mutex
 }
 
@@ -248,7 +248,7 @@ func (r *REPL) OneShot(ctx context.Context, line string) error {
 			case "unknown":
 				return r.cmdUnknown(cmd.args)
 			case "help":
-				return r.cmdHelp(cmd.args, r.getOPAVersionReport())
+				return r.cmdHelp(cmd.args)
 			case "exit":
 				return r.cmdExit()
 			}
@@ -287,13 +287,13 @@ func (r *REPL) WithRuntime(term *ast.Term) *REPL {
 }
 
 // SetOPAVersionReport sets the information about the latest OPA release.
-func (r *REPL) SetOPAVersionReport(report string) {
+func (r *REPL) SetOPAVersionReport(report [][2]string) {
 	r.mtx.Lock()
 	defer r.mtx.Unlock()
 	r.report = report
 }
 
-func (r *REPL) getOPAVersionReport() string {
+func (r *REPL) getOPAVersionReport() [][2]string {
 	r.mtx.Lock()
 	defer r.mtx.Unlock()
 	return r.report
@@ -395,9 +395,9 @@ func (r *REPL) cmdPrettyLimit(s []string) error {
 	return nil
 }
 
-func (r *REPL) cmdHelp(args []string, report string) error {
+func (r *REPL) cmdHelp(args []string) error {
 	if len(args) == 0 {
-		printHelp(r.output, r.initPrompt, report)
+		printHelp(r.output, r.initPrompt, r.report)
 	} else {
 		if desc, ok := topics[args[0]]; ok {
 			return desc.fn(r.output)
@@ -1274,10 +1274,10 @@ func isGlobalInModule(compiler *ast.Compiler, module *ast.Module, term *ast.Term
 	return len(node.Values) > 0
 }
 
-func printHelp(output io.Writer, initPrompt, report string) {
+func printHelp(output io.Writer, initPrompt string, report [][2]string) {
 	printHelpExamples(output, initPrompt)
 	printHelpCommands(output)
-	if report != "" {
+	if len(report) != 0 {
 		printOPAReleaseInfo(output, report)
 	}
 }
@@ -1354,11 +1354,25 @@ func printHelpCommands(output io.Writer) {
 	fmt.Fprintln(output, "")
 }
 
-func printOPAReleaseInfo(output io.Writer, report string) {
+func printOPAReleaseInfo(output io.Writer, report [][2]string) {
 
 	fmt.Fprintln(output, "Latest OPA Release")
 	fmt.Fprintln(output, "==================")
-	fmt.Fprintln(output, report)
+	fmt.Fprintln(output)
+
+	maxLen := 0
+
+	for _, pair := range report {
+		if len(pair[0]) > maxLen {
+			maxLen = len(pair[0])
+		}
+	}
+
+	fmtStr := fmt.Sprintf("%%-%dv : %%v\n", maxLen)
+
+	for _, pair := range report {
+		fmt.Fprintf(output, fmtStr, pair[0], pair[1])
+	}
 
 	fmt.Fprintln(output, "")
 }

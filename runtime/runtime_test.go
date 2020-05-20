@@ -244,7 +244,7 @@ func testRuntimeProcessWatchEventPolicyError(t *testing.T, asBundle bool) {
 }
 
 func TestCheckOPAUpdateBadURL(t *testing.T) {
-	testCheckOPAUpdate(t, "http://foo:8112", "")
+	testCheckOPAUpdate(t, "http://foo:8112", nil)
 }
 
 func TestCheckOPAUpdateWithNewUpdate(t *testing.T) {
@@ -258,11 +258,7 @@ func TestCheckOPAUpdateWithNewUpdate(t *testing.T) {
 	baseURL, teardown := getTestServer(exp, http.StatusOK)
 	defer teardown()
 
-	expected := "Latest Upstream Version: 100.0.0\n" +
-		"Download: https://openpolicyagent.org/downloads/v100.0.0/opa_darwin_amd64\n" +
-		"Release Notes: https://github.com/open-policy-agent/opa/releases/tag/v100.0.0"
-
-	testCheckOPAUpdate(t, baseURL, expected)
+	testCheckOPAUpdate(t, baseURL, exp)
 }
 
 func TestCheckOPAUpdateLoopBadURL(t *testing.T) {
@@ -311,21 +307,15 @@ func getTestServer(update interface{}, statusCode int) (baseURL string, teardown
 	return ts.URL, ts.Close
 }
 
-func testCheckOPAUpdate(t *testing.T, url, expected string) {
+func testCheckOPAUpdate(t *testing.T, url string, expected *report.DataResponse) {
 	t.Helper()
 	os.Setenv("OPA_TELEMETRY_SERVICE_URL", url)
 
 	ctx := context.Background()
 	rt := getTestRuntime(ctx, t)
+	result := rt.checkOPAUpdate(ctx)
 
-	done := make(chan struct{})
-	var result string
-	go func() {
-		result = rt.checkOPAUpdate(ctx, done)
-	}()
-	<-done
-
-	if result != expected {
+	if !reflect.DeepEqual(result, expected) {
 		t.Fatalf("Expected output:\"%v\" but got: \"%v\"", expected, result)
 	}
 }

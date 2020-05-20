@@ -6,7 +6,6 @@
 package report
 
 import (
-	"bytes"
 	"context"
 	"encoding/json"
 	"fmt"
@@ -98,15 +97,36 @@ func (r *Reporter) SendReport(ctx context.Context) (*DataResponse, error) {
 	}
 }
 
-// Pretty returns OPA update information in a human-readable format
+// IsSet returns true if dr is populated.
+func (dr *DataResponse) IsSet() bool {
+	return dr != nil && dr.Latest.LatestRelease != "" && dr.Latest.Download != "" && dr.Latest.ReleaseNotes != ""
+}
+
+// Slice returns the dr as a slice of key-value string pairs. If dr is nil, this function returns an empty slice.
+func (dr *DataResponse) Slice() [][2]string {
+
+	if !dr.IsSet() {
+		return nil
+	}
+
+	return [][2]string{
+		{"Latest Upstream Version", strings.TrimPrefix(dr.Latest.LatestRelease, "v")},
+		{"Download", dr.Latest.Download},
+		{"Release Notes", dr.Latest.ReleaseNotes},
+	}
+}
+
+// Pretty returns OPA release information in a human-readable format.
 func (dr *DataResponse) Pretty() string {
-	if dr.Latest.Download == "" || dr.Latest.ReleaseNotes == "" || dr.Latest.LatestRelease == "" {
+	if !dr.IsSet() {
 		return ""
 	}
 
-	var buf bytes.Buffer
-	fmt.Fprintf(&buf, "Latest Upstream Version: %v\n", strings.TrimPrefix(dr.Latest.LatestRelease, "v"))
-	fmt.Fprintf(&buf, "Download: %v\n", dr.Latest.Download)
-	fmt.Fprintf(&buf, "Release Notes: %v", dr.Latest.ReleaseNotes)
-	return buf.String()
+	var lines []string
+
+	for _, pair := range dr.Slice() {
+		lines = append(lines, fmt.Sprintf("%v: %v", pair[0], pair[1]))
+	}
+
+	return strings.Join(lines, "\n")
 }

@@ -410,26 +410,16 @@ func (rt *Runtime) StartREPL(ctx context.Context) {
 
 	if rt.Params.EnableVersionCheck {
 		go func() {
-			repl.SetOPAVersionReport(rt.checkOPAUpdate(ctx, nil))
+			repl.SetOPAVersionReport(rt.checkOPAUpdate(ctx).Slice())
 		}()
 
 	}
 	repl.Loop(ctx)
 }
 
-func (rt *Runtime) checkOPAUpdate(ctx context.Context, done chan struct{}) string {
-	defer func() {
-		if done != nil {
-			close(done)
-		}
-	}()
-
-	resp, err := rt.reporter.SendReport(ctx)
-	if err != nil {
-		return ""
-	}
-
-	return resp.Pretty()
+func (rt *Runtime) checkOPAUpdate(ctx context.Context) *report.DataResponse {
+	resp, _ := rt.reporter.SendReport(ctx)
+	return resp
 }
 
 func (rt *Runtime) checkOPAUpdateLoop(ctx context.Context, uploadDuration time.Duration, done chan struct{}) {

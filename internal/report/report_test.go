@@ -134,7 +134,36 @@ func TestPretty(t *testing.T) {
 		"Release Notes: https://github.com/open-policy-agent/opa/releases/tag/v100.0.0"
 
 	if resp != exp {
-		t.Fatalf("Expected response:%v but got %v", exp, resp)
+		t.Fatalf("Expected response:\n\n%v\n\nGot:\n\n%v\n\n", exp, resp)
+	}
+}
+
+func TestSlice(t *testing.T) {
+
+	var dr *DataResponse
+
+	if len(dr.Slice()) != 0 {
+		t.Fatal("expected empty slice")
+	}
+
+	dr = &DataResponse{}
+
+	if len(dr.Slice()) != 0 {
+		t.Fatal("expected empty slice since fields are unset")
+	}
+
+	dr.Latest.Download = "https://example.com"
+	dr.Latest.LatestRelease = "v0.100.0"
+	dr.Latest.ReleaseNotes = "https://example2.com"
+
+	exp := [][2]string{
+		{"Latest Upstream Version", "0.100.0"},
+		{"Download", "https://example.com"},
+		{"Release Notes", "https://example2.com"},
+	}
+
+	if !reflect.DeepEqual(exp, dr.Slice()) {
+		t.Fatalf("expected %v but got %v", exp, dr.Slice())
 	}
 }
 
