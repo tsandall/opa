@@ -45,8 +45,6 @@ func NewAPIServerTestParams() runtime.Params {
 
 	params.GracefulShutdownPeriod = 10 // seconds
 
-	params.SkipVersionCheck = true
-
 	return params
 }
 

@@ -11,9 +11,9 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
+	"strings"
 
 	"os"
-	"strings"
 	"time"
 
 	"github.com/open-policy-agent/opa/plugins/rest"
@@ -38,8 +38,10 @@ type DataResponse struct {
 
 // ReleaseDetails holds information about the latest OPA release
 type ReleaseDetails struct {
-	Download     string `json:"download,omitempty"`      // link to download the OPA release
-	ReleaseNotes string `json:"release_notes,omitempty"` // link to the OPA release notes
+	Download      string `json:"download,omitempty"`       // link to download the OPA release
+	ReleaseNotes  string `json:"release_notes,omitempty"`  // link to the OPA release notes
+	LatestRelease string `json:"latest_release,omitempty"` // latest OPA released version
+	OPAUpToDate   bool   `json:"opa_up_to_date,omitempty"` // is running OPA version greater than or equal to the latest released
 }
 
 // New returns an instance of the Reporter
@@ -98,19 +100,13 @@ func (r *Reporter) SendReport(ctx context.Context) (*DataResponse, error) {
 
 // Pretty returns OPA update information in a human-readable format
 func (dr *DataResponse) Pretty() string {
-	if dr.Latest.Download == "" || dr.Latest.ReleaseNotes == "" {
+	if dr.Latest.Download == "" || dr.Latest.ReleaseNotes == "" || dr.Latest.LatestRelease == "" {
 		return ""
 	}
 
-	parts := strings.Split(dr.Latest.ReleaseNotes, "/")
-	latest := parts[len(parts)-1]
-
 	var buf bytes.Buffer
-	fmt.Fprintln(&buf, "")
-	fmt.Fprintf(&buf, "# OPA is out-of-date.\n")
-	fmt.Fprintf(&buf, "# OPA version %v is now available. Current version %v\n", latest, version.Version)
-	fmt.Fprintf(&buf, "\n")
-	fmt.Fprintf(&buf, "# Download OPA: %v\n", dr.Latest.Download)
-	fmt.Fprintf(&buf, "# Release Notes: %v\n", dr.Latest.ReleaseNotes)
+	fmt.Fprintf(&buf, "Latest Upstream Version: %v\n", strings.TrimPrefix(dr.Latest.LatestRelease, "v"))
+	fmt.Fprintf(&buf, "Download: %v\n", dr.Latest.Download)
+	fmt.Fprintf(&buf, "Release Notes: %v", dr.Latest.ReleaseNotes)
 	return buf.String()
 }

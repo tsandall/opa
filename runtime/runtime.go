@@ -14,7 +14,6 @@ import (
 	"io"
 	"os"
 	"os/signal"
-	"strings"
 	"sync"
 	"syscall"
 	"time"
@@ -157,9 +156,9 @@ type Params struct {
 	// server to shutdown gracefully.
 	GracefulShutdownPeriod int
 
-	// SkipVersionCheck flag controls whether OPA will report its version to an external service.
-	// If this flag is true, OPA will not report its version to the external service
-	SkipVersionCheck bool
+	// EnableVersionCheck flag controls whether OPA will report its version to an external service.
+	// If this flag is true, OPA will report its version to the external service
+	EnableVersionCheck bool
 }
 
 // LoggingConfig stores the configuration for OPA's logging behaviour.
@@ -171,9 +170,9 @@ type LoggingConfig struct {
 // NewParams returns a new Params object.
 func NewParams() Params {
 	return Params{
-		Output:           os.Stdout,
-		BundleMode:       false,
-		SkipVersionCheck: false,
+		Output:             os.Stdout,
+		BundleMode:         false,
+		EnableVersionCheck: false,
 	}
 }
 
@@ -208,7 +207,7 @@ func NewRuntime(ctx context.Context, params Params) (*Runtime, error) {
 	}
 
 	var reporter *report.Reporter
-	if !params.SkipVersionCheck {
+	if params.EnableVersionCheck {
 		var err error
 		reporter, err = report.New(params.ID)
 		if err != nil {
@@ -325,7 +324,7 @@ func (rt *Runtime) Serve(ctx context.Context) error {
 		}
 	}
 
-	if !rt.Params.SkipVersionCheck {
+	if rt.Params.EnableVersionCheck {
 		d := time.Duration(int64(time.Second) * defaultUploadIntervalSec)
 		rt.done = make(chan struct{})
 		go rt.checkOPAUpdateLoop(ctx, d, rt.done)
@@ -409,13 +408,16 @@ func (rt *Runtime) StartREPL(ctx context.Context) {
 		}
 	}
 
-	if !rt.Params.SkipVersionCheck {
-		go rt.checkOPAUpdate(ctx, nil)
+	if rt.Params.EnableVersionCheck {
+		go func() {
+			repl.SetOPAVersionReport(rt.checkOPAUpdate(ctx, nil))
+		}()
+
 	}
 	repl.Loop(ctx)
 }
 
-func (rt *Runtime) checkOPAUpdate(ctx context.Context, done chan struct{}) {
+func (rt *Runtime) checkOPAUpdate(ctx context.Context, done chan struct{}) string {
 	defer func() {
 		if done != nil {
 			close(done)
@@ -424,38 +426,35 @@ func (rt *Runtime) checkOPAUpdate(ctx context.Context, done chan struct{}) {
 
 	resp, err := rt.reporter.SendReport(ctx)
 	if err != nil {
-		return
+		return ""
 	}
 
-	banner := resp.Pretty()
-	if banner != "" {
-		fmt.Fprintln(rt.Params.Output, banner)
-		fmt.Fprintf(rt.Params.Output, "> ")
-	}
-	return
+	return resp.Pretty()
 }
 
 func (rt *Runtime) checkOPAUpdateLoop(ctx context.Context, uploadDuration time.Duration, done chan struct{}) {
 	ticker := time.NewTicker(uploadDuration)
 
 	for {
+		resp, err := rt.reporter.SendReport(ctx)
+		if err != nil {
+			logrus.WithField("err", err).Debug("Unable to send OPA version report.")
+		} else {
+			if resp.Latest.OPAUpToDate {
+				logrus.WithFields(logrus.Fields{
+					"current_version": version.Version,
+				}).Debug("OPA is up-to-date.")
+			} else {
+				logrus.WithFields(logrus.Fields{
+					"download_opa":    resp.Latest.Download,
+					"release_notes":   resp.Latest.ReleaseNotes,
+					"current_version": version.Version,
+					"latest_version":  resp.Latest.LatestRelease,
+				}).Info("OPA is out-of-date.")
+			}
+		}
 		select {
 		case <-ticker.C:
-			resp, err := rt.reporter.SendReport(ctx)
-			if err != nil {
-				logrus.WithField("err", err).Debug("Unable to send OPA version report.")
-			} else {
-				if resp.Latest.Download == "" || resp.Latest.ReleaseNotes == "" {
-					logrus.Debugf("OPA is up-to-date. Current version %v", version.Version)
-				} else {
-					parts := strings.Split(resp.Latest.ReleaseNotes, "/")
-					latest := parts[len(parts)-1]
-					logrus.WithFields(logrus.Fields{
-						"download_opa":  resp.Latest.Download,
-						"release_notes": resp.Latest.ReleaseNotes,
-					}).Infof("OPA is out-of-date. Current version %v. Latest version %v", version.Version, latest)
-				}
-			}
 		case <-done:
 			ticker.Stop()
 			return
@@ -579,7 +578,7 @@ func (rt *Runtime) getBanner() string {
 	fmt.Fprintln(&buf, "")
 	fmt.Fprintf(&buf, "OPA %v (commit %v, built at %v)\n", version.Version, version.Vcs, version.Timestamp)
 	fmt.Fprintf(&buf, "\n")
-	fmt.Fprintf(&buf, "Run 'help' to see a list of commands.\n")
+	fmt.Fprintf(&buf, "Run 'help' to see a list of commands and check for updates.\n")
 	return buf.String()
 }
 

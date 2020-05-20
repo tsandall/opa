@@ -46,31 +46,30 @@ func generateCmdOutput(out io.Writer, check bool) {
 	fmt.Fprintln(out, "Build Hostname: "+version.Hostname)
 
 	if check {
-		checkOPAUpdate(out)
+		err := checkOPAUpdate(out)
+		if err != nil {
+			fmt.Fprintf(out, "Error: %v\n", err)
+			os.Exit(1)
+		}
 	}
 }
 
-func checkOPAUpdate(out io.Writer) {
+func checkOPAUpdate(out io.Writer) error {
 	id, err := uuid.New(rand.Reader)
 	if err != nil {
-		return
+		return err
 	}
 
 	reporter, err := report.New(id)
 	if err != nil {
-		return
+		return err
 	}
 
 	resp, err := reporter.SendReport(context.Background())
 	if err != nil {
-		return
+		return err
 	}
 
-	banner := resp.Pretty()
-	if banner != "" {
-		fmt.Fprintln(out, banner)
-	} else {
-		fmt.Fprintln(out, "\n# OPA is up-to-date.")
-	}
-	return
+	fmt.Fprintln(out, resp.Pretty())
+	return nil
 }

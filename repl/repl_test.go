@@ -313,6 +313,32 @@ func TestHelp(t *testing.T) {
 	}
 }
 
+func TestHelpWithOPAVersionReport(t *testing.T) {
+	ctx := context.Background()
+	store := inmem.New()
+	var buffer bytes.Buffer
+	repl := newRepl(store, &buffer)
+
+	// empty report
+	repl.SetOPAVersionReport("")
+	repl.OneShot(ctx, "help")
+
+	if strings.Contains(buffer.String(), "Latest OPA Release") {
+		t.Fatalf("Unexpected output from help: \"%v\"", buffer.String())
+	}
+
+	report := "Latest Upstream Version: 0.19.2\n" +
+		"Download: https://openpolicyagent.org/downloads/v0.19.2/opa_darwin_amd64\n" +
+		"Release Notes: https://github.com/open-policy-agent/opa/releases/tag/v0.19.2"
+
+	repl.SetOPAVersionReport(report)
+	repl.OneShot(ctx, "help")
+
+	if !strings.Contains(buffer.String(), report) {
+		t.Fatalf("Expected output from help to contain: \"%v\" but got \"%v\"", report, buffer.String())
+	}
+}
+
 func TestShowDebug(t *testing.T) {
 	ctx := context.Background()
 	store := inmem.New()

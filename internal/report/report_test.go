@@ -13,8 +13,6 @@ import (
 	"os"
 	"reflect"
 	"testing"
-
-	"github.com/open-policy-agent/opa/version"
 )
 
 func TestNewReportDefaultURL(t *testing.T) {
@@ -76,38 +74,12 @@ func TestSendReportDecodeError(t *testing.T) {
 	}
 }
 
-func TestSendReportNoOPAUpdate(t *testing.T) {
-
-	// test server
-	baseURL, teardown := getTestServer(nil, http.StatusOK)
-	defer teardown()
-
-	os.Setenv("OPA_TELEMETRY_SERVICE_URL", baseURL)
-
-	reporter, err := New("")
-	if err != nil {
-		t.Fatalf("Unexpected error %v", err)
-	}
-
-	resp, err := reporter.SendReport(context.Background())
-
-	if err != nil {
-		t.Fatalf("Expected no error but got %v", err)
-	}
-
-	if resp.Latest.Download != "" {
-		t.Fatalf("Expected empty downlaod link but got %v", resp.Latest.Download)
-	}
-
-	if resp.Latest.ReleaseNotes != "" {
-		t.Fatalf("Expected empty release notes but got %v", resp.Latest.ReleaseNotes)
-	}
-}
-
 func TestSendReportWithOPAUpdate(t *testing.T) {
 	exp := &DataResponse{Latest: ReleaseDetails{
-		Download:     "https://openpolicyagent.org/downloads/v100.0.0/opa_darwin_amd64",
-		ReleaseNotes: "https://github.com/open-policy-agent/opa/releases/tag/v100.0.0",
+		Download:      "https://openpolicyagent.org/downloads/v100.0.0/opa_darwin_amd64",
+		ReleaseNotes:  "https://github.com/open-policy-agent/opa/releases/tag/v100.0.0",
+		LatestRelease: "v100.0.0",
+		OPAUpToDate:   false,
 	}}
 
 	// test server
@@ -148,13 +120,18 @@ func TestPretty(t *testing.T) {
 	}
 
 	dr.Latest.ReleaseNotes = "https://github.com/open-policy-agent/opa/releases/tag/v100.0.0"
-	version.Version = "v0.20.0"
 	resp = dr.Pretty()
 
-	exp := "\n# OPA is out-of-date.\n" +
-		"# OPA version v100.0.0 is now available. Current version v0.20.0\n" + "\n" +
-		"# Download OPA: https://openpolicyagent.org/downloads/v100.0.0/opa_darwin_amd64\n" +
-		"# Release Notes: https://github.com/open-policy-agent/opa/releases/tag/v100.0.0\n"
+	if resp != "" {
+		t.Fatalf("Expected empty response but got %v", resp)
+	}
+
+	dr.Latest.LatestRelease = "v100.0.0"
+	resp = dr.Pretty()
+
+	exp := "Latest Upstream Version: 100.0.0\n" +
+		"Download: https://openpolicyagent.org/downloads/v100.0.0/opa_darwin_amd64\n" +
+		"Release Notes: https://github.com/open-policy-agent/opa/releases/tag/v100.0.0"
 
 	if resp != exp {
 		t.Fatalf("Expected response:%v but got %v", exp, resp)

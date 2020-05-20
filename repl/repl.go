@@ -15,6 +15,7 @@ import (
 	"os"
 	"strconv"
 	"strings"
+	"sync"
 
 	"github.com/peterh/liner"
 
@@ -57,6 +58,8 @@ type REPL struct {
 	undefinedDisabled bool
 	errLimit          int
 	prettyLimit       int
+	report            string
+	mtx               sync.Mutex
 }
 
 type explainMode string
@@ -245,7 +248,7 @@ func (r *REPL) OneShot(ctx context.Context, line string) error {
 			case "unknown":
 				return r.cmdUnknown(cmd.args)
 			case "help":
-				return r.cmdHelp(cmd.args)
+				return r.cmdHelp(cmd.args, r.getOPAVersionReport())
 			case "exit":
 				return r.cmdExit()
 			}
@@ -281,6 +284,19 @@ func (r *REPL) DisableUndefinedOutput(yes bool) *REPL {
 func (r *REPL) WithRuntime(term *ast.Term) *REPL {
 	r.runtime = term
 	return r
+}
+
+// SetOPAVersionReport sets the information about the latest OPA release.
+func (r *REPL) SetOPAVersionReport(report string) {
+	r.mtx.Lock()
+	defer r.mtx.Unlock()
+	r.report = report
+}
+
+func (r *REPL) getOPAVersionReport() string {
+	r.mtx.Lock()
+	defer r.mtx.Unlock()
+	return r.report
 }
 
 func (r *REPL) complete(line string) []string {
@@ -379,9 +395,9 @@ func (r *REPL) cmdPrettyLimit(s []string) error {
 	return nil
 }
 
-func (r *REPL) cmdHelp(args []string) error {
+func (r *REPL) cmdHelp(args []string, report string) error {
 	if len(args) == 0 {
-		printHelp(r.output, r.initPrompt)
+		printHelp(r.output, r.initPrompt, report)
 	} else {
 		if desc, ok := topics[args[0]]; ok {
 			return desc.fn(r.output)
@@ -1258,9 +1274,12 @@ func isGlobalInModule(compiler *ast.Compiler, module *ast.Module, term *ast.Term
 	return len(node.Values) > 0
 }
 
-func printHelp(output io.Writer, initPrompt string) {
+func printHelp(output io.Writer, initPrompt, report string) {
 	printHelpExamples(output, initPrompt)
 	printHelpCommands(output)
+	if report != "" {
+		printOPAReleaseInfo(output, report)
+	}
 }
 
 func printHelpExamples(output io.Writer, promptSymbol string) {
@@ -1331,6 +1350,15 @@ func printHelpCommands(output io.Writer) {
 	for key, desc := range topics {
 		fmt.Fprintf(output, f, "help "+key, desc.comment)
 	}
+
+	fmt.Fprintln(output, "")
+}
+
+func printOPAReleaseInfo(output io.Writer, report string) {
+
+	fmt.Fprintln(output, "Latest OPA Release")
+	fmt.Fprintln(output, "==================")
+	fmt.Fprintln(output, report)
 
 	fmt.Fprintln(output, "")
 }

@@ -22,7 +22,7 @@ In case of the `opa version` command, this feature can be enabled by specifying 
 ## External Service
 
 OPA uploads its version information by default at [telemetry.openpolicyagent.org](https://telemetry.openpolicyagent.org).
-The environment variable *OPA_TELEMETRY_SERVICE_URL* can be used to configure the external service OPA reports to.
+The environment variable `OPA_TELEMETRY_SERVICE_URL` can be used to configure the external service OPA reports to.
 
 Sample HTTP request from OPA to the external service looks like this:
 
@@ -42,9 +42,8 @@ User-Agent: "Open Policy Agent/v0.12.3 (darwin, amd64)"
 
 The *id* field in the request body above is a version 4 random UUID generated when OPA starts.
 
-The external service checks the OPA version reported by a remote OPA client and if it doesn't match the latest
-released OPA version, the external service responds with information about the latest OPA release. This information includes
-a link to download the latest OPA version, release notes etc.
+The external service checks the OPA version reported by a remote OPA client and responds with information about the
+latest OPA release. This information includes a link to download the latest OPA version, release notes etc.
 
 Sample response from the external service looks like this:
 
@@ -52,7 +51,8 @@ Sample response from the external service looks like this:
 {
   "latest": {
     "download": "https://openpolicyagent.org/downloads/v0.19.2/opa_darwin_amd64",
-    "release_notes": "https://github.com/open-policy-agent/opa/releases/tag/v0.19.2"
+    "release_notes": "https://github.com/open-policy-agent/opa/releases/tag/v0.19.2",
+    "latest_release": "v0.19.2"
   }
 }
 ```
@@ -64,8 +64,7 @@ to the OPA release notes.
 
 * OPA's anonymous version reporting feature provides users with up-to-date information about new OPA versions while
 still executing the familiar OPA `run` and `version` commands. It helps users stay abreast of OPA's latest capabilities
-and hence empowers them to make informed decisions while upgrading their OPA deployments. The OPA `run` and `version`
-commands could be enhanced to warn users if their OPA version is outside the upstream support window.
+and hence empowers them to make informed decisions while upgrading their OPA deployments.
 
 * OPA maintainers and the [Cloud Native Computing Foundation](https://cncf.io) (CNCF) executive staff can use the version
 reports for obtaining more information about OPA usage and engagement. For example, the information can be used in making better
