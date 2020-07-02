@@ -14,9 +14,11 @@ jobs:
       - name: Check out code into the Go module directory
         uses: actions/checkout@v2
       - name: Build and Test Golang
-          run: make travis-go
+        run: make travis-go
+        timeout-minutes: 20
       - name: Build and Test WASM
         run: make travis-wasm
+        timeout-minutes: 20
       - name: Deploy OPA Edge
         env:
           DOCKER_USER: ${{ secrets.DOCKER_USER }}
