@@ -1,4 +1,4 @@
-name: Upload Release Assets
+name: Post Release
 
 on:
   release:

@@ -1,4 +1,4 @@
-name: Push Release
+name: Post Tag
 
 on:
   push:
