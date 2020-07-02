@@ -13,30 +13,63 @@ jobs:
       - name: Check out code
         uses: actions/checkout@v2
 
-      - name: Build and Test
-        run: make travis
-        timeout-minutes: 60
+      - name: Compute Version
+        run: |
+          TAG_NAME="${GITHUB_REF##*/}"
+          OPA_VERSION="${TAG_NAME#v}"
 
-      - name: Deploy OPA Release
+          # Set the env vars for the subsequent steps of this job
+          echo ::set-env name=TAG_NAME::${TAG_NAME}
+          echo ::set-env name=OPA_VERSION::${OPA_VERSION}
+
+      - name: Build Release Binaries
+        run: make release VERSION=${OPA_VERSION}
+
+      # Steps below assume the bins are in the root of the repo, but make
+      # release places them in a versioned directory
+      # TODO: Refactor make targets to get them in sync
+      - name: Copy Relase Binaries
+        run: cp ./release/${OPA_VERSION}/opa_* ./
+
+      - name: Deploy OPA Release Images
         env:
           DOCKER_USER: ${{ secrets.DOCKER_USER }}
           DOCKER_PASSWORD: ${{ secrets.DOCKER_PASSWORD }}
-        # TODO: Remove s3 bucket override
+        # TODO: Remove image org override
         #run: make deploy-travis
         run: make release-travis IMAGE_ORG=patrickeast
 
-      - name: (Optional) Create Draft Release
+      - name: Create or Update Release
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+        # TODO: Move this into a script & make target
         run: |
           set -x
 
           TAG_NAME="${GITHUB_REF##*/}"
 
-          if hub release show "${TAG_NAME}" > /dev/null; then
-            echo "Release already exists... skipping"
-            exit 0
+          # Collect a list of opa binaries (look for opa_<platform>_<arch>[extension])
+          ASSETS=()
+          for asset in ./opa_*_*; do
+            ASSETS+=("-a" "$asset")
+          done
+
+          if [[ -z "${ASSETS[@]}" ]]; then
+            echo "No release assets found!"
+            exit 1
           fi
 
-          # Create a draft release
-          hub release create -m "${TAG_NAME}" --draft "${TAG_NAME}"
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          if hub release show "${TAG_NAME}" > /dev/null; then
+            # Occurs when the tag is created via GitHub UI w/ a release
+            hub release edit "${ASSETS[@]}" "${TAG_NAME}"
+          else
+            # Create a draft release
+            hub release create "${ASSETS[@]}" -m "${TAG_NAME}" --draft "${TAG_NAME}"
+          fi
+
+      - name: Save Artifacts
+        uses: actions/upload-artifact@v2
+        with:
+          name: OPA Binaries
+          path: opa_*

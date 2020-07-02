@@ -3,9 +3,9 @@ name: PR Check
 on: [pull_request]
 
 jobs:
-  # Golang build and tests workflow.
-  # Note: The build uses Docker so do *not* setup Golang on the runner vm.
-  # TODO: Split into separate build, test, perf, and check targets to lower overall runtime of PR checks.
+  # TODO: We can split this into separate build, test, perf, and check jobs that
+  # run in parallel to lower overall runtime of PR checks and give a nicer UI on
+  # the reviews. See separate WASM step below for an example.
   go:
     name: Go
     runs-on: ubuntu-18.04
@@ -17,7 +17,8 @@ jobs:
         run: make travis-go
         timeout-minutes: 30
 
-      - uses: actions/upload-artifact@v2
+      - name: Save Artifacts
+        uses: actions/upload-artifact@v2
         with:
           name: OPA Binaries
           path: opa_*
