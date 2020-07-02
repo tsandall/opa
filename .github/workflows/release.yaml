@@ -51,21 +51,21 @@ jobs:
           asset_content_type: application/octet-stream
 
       - name: Upload Windows Binary Release Asset
-          uses: actions/upload-release-asset@v1
-          env:
-            GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          with:
-            upload_url: ${{ steps.create_release.outputs.upload_url }}
-            asset_path: ./opa_windows_amd64.exe
-            asset_name: opa_windows_amd64.exe
-            asset_content_type: application/octet-stream
+        uses: actions/upload-release-asset@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          upload_url: ${{ steps.create_release.outputs.upload_url }}
+          asset_path: ./opa_windows_amd64.exe
+          asset_name: opa_windows_amd64.exe
+          asset_content_type: application/octet-stream
 
       - name: Upload Linux Binary Release Asset
-          uses: actions/upload-release-asset@v1
-          env:
-            GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          with:
-            upload_url: ${{ steps.create_release.outputs.upload_url }}
-            asset_path: ./opa_linux_amd64
-            asset_name: opa_linux_amd64
-            asset_content_type: application/octet-stream
+        uses: actions/upload-release-asset@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          upload_url: ${{ steps.create_release.outputs.upload_url }}
+          asset_path: ./opa_linux_amd64
+          asset_name: opa_linux_amd64
+          asset_content_type: application/octet-stream
