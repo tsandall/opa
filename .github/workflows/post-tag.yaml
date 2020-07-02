@@ -15,7 +15,7 @@ jobs:
 
       - name: Build and Test
         run: make travis
-        timeout-minutes: 20
+        timeout-minutes: 60
 
       - name: Deploy OPA Release
         env:
@@ -27,7 +27,7 @@ jobs:
         #run: make deploy-travis
         run: make release-travis OPA_S3_RELEASE_BUCKET=test-opa-releases IMAGE_ORG=patrickeast
 
-      - name: Create Draft Release
+      - name: (Optional) Create Draft Release
         run: |
           set -x
 

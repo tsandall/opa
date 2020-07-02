@@ -15,7 +15,7 @@ jobs:
       - name: Compute Version
         run: |
           TAG_NAME="${GITHUB_REF##*/}"
-          OPA_VERSION=${TAG_NAME#"v"}
+          OPA_VERSION="${TAG_NAME#v}"
 
           # Set the env vars for the subsequent steps of this job
           echo ::set-env name=TAG_NAME::${TAG_NAME}
@@ -23,7 +23,6 @@ jobs:
 
       - name: Build Release Assets
         run: make release VERSION=${OPA_VERSION}
-        timeout-minutes: 20
 
       - name: Upload Release Assets
         run: |
