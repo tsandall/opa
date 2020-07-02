@@ -1,0 +1,71 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - '*'
+
+jobs:
+  build:
+    name: Upload Release Asset
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out code
+        uses: actions/checkout@v2
+
+      - name: Build and Test
+        run: make travis
+        timeout-minutes: 20
+
+      - name: Deploy OPA Release
+        env:
+          DOCKER_USER: ${{ secrets.DOCKER_USER }}
+          DOCKER_PASSWORD: ${{ secrets.DOCKER_PASSWORD }}
+          AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+        # TODO: Remove s3 bucket override
+        #run: make deploy-travis
+        run: make release-travis OPA_S3_RELEASE_BUCKET=test-opa-releases IMAGE_ORG=patrickeast
+
+      - name: Create Release
+        id: create_release
+        uses: actions/create-release@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          tag_name: ${{ github.ref }}
+          release_name: ${{ github.ref }}
+          draft: true
+          prerelease: false
+
+
+      # Upload each of the binaries as release assets
+      - name: Upload Darwin Binary Release Asset
+        uses: actions/upload-release-asset@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          upload_url: ${{ steps.create_release.outputs.upload_url }}
+          asset_path: ./opa_darwin_amd64
+          asset_name: opa_darwin_amd64
+          asset_content_type: application/octet-stream
+
+      - name: Upload Windows Binary Release Asset
+          uses: actions/upload-release-asset@v1
+          env:
+            GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          with:
+            upload_url: ${{ steps.create_release.outputs.upload_url }}
+            asset_path: ./opa_windows_amd64.exe
+            asset_name: opa_windows_amd64.exe
+            asset_content_type: application/octet-stream
+
+      - name: Upload Linux Binary Release Asset
+          uses: actions/upload-release-asset@v1
+          env:
+            GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          with:
+            upload_url: ${{ steps.create_release.outputs.upload_url }}
+            asset_path: ./opa_linux_amd64
+            asset_name: opa_linux_amd64
+            asset_content_type: application/octet-stream
