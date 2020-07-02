@@ -1,0 +1,46 @@
+name: Upload Release Assets
+
+on:
+  release:
+    types:
+      - created
+
+jobs:
+  run:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out code
+        uses: actions/checkout@v2
+
+      - name: Compute Version
+        run: |
+          TAG_NAME="${GITHUB_REF##*/}"
+          OPA_VERSION=${TAG_NAME#"v"}
+
+          # Set the env vars for the subsequent steps of this job
+          echo ::set-env name=TAG_NAME::${TAG_NAME}
+          echo ::set-env name=OPA_VERSION::${OPA_VERSION}
+
+      - name: Build Release Assets
+        run: make release VERSION=${OPA_VERSION}
+        timeout-minutes: 20
+
+      - name: Upload Release Assets
+        run: |
+          set -x
+
+          # Collect a list of opa binaries (look for opa_<platform>_<arch>[extension])
+          assets=()
+          for asset in ./opa_*_*; do
+            assets+=("-a" "$asset")
+          done
+
+          # Error if no assets are found.
+          if [[ -z "${assets[@]}" ]]; then
+            exit 1
+          fi
+
+          # Edit the release associated with this tag uploading the asssets
+          hub release edit "${assets[@]}" "${TAG_NAME}"
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
