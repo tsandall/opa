@@ -26,3 +26,19 @@ jobs:
         # TODO: Remove s3 bucket override
         #run: make deploy-travis
         run: make release-travis OPA_S3_RELEASE_BUCKET=test-opa-releases IMAGE_ORG=patrickeast
+
+      - name: Create Draft Release
+        run: |
+          set -x
+
+          TAG_NAME="${GITHUB_REF##*/}"
+
+          if hub release show "${TAG_NAME}" > /dev/null; then
+            echo "Release already exists... skipping"
+            exit 0
+          fi
+
+          # Create a draft release
+          hub release create -m "${TAG_NAME}" --draft "${TAG_NAME}"
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
