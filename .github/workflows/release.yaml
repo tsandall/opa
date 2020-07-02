@@ -7,7 +7,7 @@ on:
 
 jobs:
   build:
-    name: Cut Release
+    name: Push Latest Release
     runs-on: ubuntu-latest
     steps:
       - name: Check out code
@@ -26,46 +26,3 @@ jobs:
         # TODO: Remove s3 bucket override
         #run: make deploy-travis
         run: make release-travis OPA_S3_RELEASE_BUCKET=test-opa-releases IMAGE_ORG=patrickeast
-
-      - name: Create Release
-        id: create_release
-        uses: actions/create-release@v1
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        with:
-          tag_name: ${{ github.ref }}
-          release_name: ${{ github.ref }}
-          draft: true
-          prerelease: false
-
-
-      # Upload each of the binaries as release assets
-      - name: Upload Darwin Binary Release Asset
-        uses: actions/upload-release-asset@v1
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        with:
-          upload_url: ${{ steps.create_release.outputs.upload_url }}
-          asset_path: ./opa_darwin_amd64
-          asset_name: opa_darwin_amd64
-          asset_content_type: application/octet-stream
-
-      - name: Upload Windows Binary Release Asset
-        uses: actions/upload-release-asset@v1
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        with:
-          upload_url: ${{ steps.create_release.outputs.upload_url }}
-          asset_path: ./opa_windows_amd64.exe
-          asset_name: opa_windows_amd64.exe
-          asset_content_type: application/octet-stream
-
-      - name: Upload Linux Binary Release Asset
-        uses: actions/upload-release-asset@v1
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        with:
-          upload_url: ${{ steps.create_release.outputs.upload_url }}
-          asset_path: ./opa_linux_amd64
-          asset_name: opa_linux_amd64
-          asset_content_type: application/octet-stream

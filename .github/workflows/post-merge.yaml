@@ -7,7 +7,7 @@ on:
 
 jobs:
   deploy-edge:
-    name: Deploy Edge
+    name: Push Edge Release
     runs-on: ubuntu-18.04
     steps:
       - name: Check out code
