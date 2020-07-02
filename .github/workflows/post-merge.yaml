@@ -10,14 +10,13 @@ jobs:
     name: Deploy Edge
     runs-on: ubuntu-18.04
     steps:
-      - name: Check out code into the Go module directory
+      - name: Check out code
         uses: actions/checkout@v2
-      - name: Build and Test Golang
-        run: make travis-go
+
+      - name: Build and Test
+        run: make travis
         timeout-minutes: 20
-      - name: Build and Test WASM
-        run: make travis-wasm
-        timeout-minutes: 20
+
       - name: Deploy OPA Edge
         env:
           DOCKER_USER: ${{ secrets.DOCKER_USER }}

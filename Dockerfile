@@ -18,6 +18,7 @@ MAINTAINER Torin Sandall <torinsandall@gmail.com>
 COPY --from=certs /etc/ssl/certs/ca-certificates.crt /etc/ssl/certs/ca-certificates.crt
 
 # Hack.. https://github.com/moby/moby/issues/37965
+# _Something_ needs to be between the two COPY steps.
 USER ${USER}
 
 COPY opa_linux_amd64 /opa
