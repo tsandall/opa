@@ -1,4 +1,4 @@
-name: OPA Edge
+name: Post Merge
 
 on:
   push:
@@ -8,7 +8,6 @@ on:
 jobs:
   deploy-edge:
     name: Deploy Edge
-    needs: [go, wasm]
     runs-on: ubuntu-18.04
     steps:
       - name: Check out code into the Go module directory

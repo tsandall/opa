@@ -1,4 +1,4 @@
-name: OPA Check
+name: PR Check
 
 on: [pull_request]
 
