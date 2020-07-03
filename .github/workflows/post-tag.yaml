@@ -25,7 +25,7 @@ jobs:
       # release places them in a versioned directory
       # TODO: Refactor make targets to get them in sync
       - name: Copy Relase Binaries
-        run: cp ./_release/${OPA_VERSION}/opa_* ./
+        run: cp ./_release/${TAG_NAME#v}/opa_* ./
 
       - name: Deploy OPA Release Images
         env:
