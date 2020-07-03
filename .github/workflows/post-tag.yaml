@@ -13,23 +13,19 @@ jobs:
       - name: Check out code
         uses: actions/checkout@v2
 
-      - name: Compute Version
-        run: |
-          TAG_NAME="${GITHUB_REF##*/}"
-          OPA_VERSION="${TAG_NAME#v}"
+      - name: Set TAG_NAME in Environment
+        # Subsequent jobs will be have the computed tag name
+        run: echo ::set-env name=TAG_NAME::"${GITHUB_REF##*/}"
 
-          # Set the env vars for the subsequent steps of this job
-          echo ::set-env name=TAG_NAME::${TAG_NAME}
-          echo ::set-env name=OPA_VERSION::${OPA_VERSION}
 
       - name: Build Release Binaries
-        run: make release VERSION=${OPA_VERSION}
+        run: make release VERSION=${TAG_NAME#v}
 
       # Steps below assume the bins are in the root of the repo, but make
       # release places them in a versioned directory
       # TODO: Refactor make targets to get them in sync
       - name: Copy Relase Binaries
-        run: cp ./release/${OPA_VERSION}/opa_* ./
+        run: cp ./_release/${OPA_VERSION}/opa_* ./
 
       - name: Deploy OPA Release Images
         env:
