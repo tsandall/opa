@@ -292,7 +292,7 @@ netlify-preview: clean docs-clean build docs-live-blocks-install-deps docs-live-
 
 .PHONY: release
 release:
-	$(DOCKER) run -it --rm \
+	$(DOCKER) run --rm \
 		-v $(PWD)/_release/$(VERSION):/_release/$(VERSION) \
 		-v $(PWD):/_src \
 		$(RELEASE_BUILD_IMAGE) \
@@ -300,7 +300,7 @@ release:
 
 .PHONY: release-local
 release-local:
-	$(DOCKER) run -it --rm \
+	$(DOCKER) run --rm \
 		-v $(PWD)/_release/$(VERSION):/_release/$(VERSION) \
 		-v $(PWD):/_src \
 		$(RELEASE_BUILD_IMAGE) \
@@ -308,7 +308,7 @@ release-local:
 
 .PHONY: release-patch
 release-patch:
-	@$(DOCKER) run -it --rm \
+	@$(DOCKER) run --rm \
 		-e LAST_VERSION=$(LAST_VERSION) \
 		-v $(PWD):/_src \
 		python:2.7 \
@@ -316,7 +316,7 @@ release-patch:
 
 .PHONY: dev-patch
 dev-patch:
-	@$(DOCKER) run -it --rm \
+	@$(DOCKER) run --rm \
 		-v $(PWD):/_src \
 		python:2.7 \
 		/_src/build/gen-dev-patch.sh --version=$(VERSION) --source-url=/_src
