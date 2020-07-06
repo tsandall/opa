@@ -35,7 +35,7 @@ jobs:
         run: make release-travis IMAGE_ORG=patrickeast
 
       - name: Create or Update Release
-        run: ./build/github-release.sh
+        run: ./build/github-release.sh --asset-dir ./_release/${TAG_NAME#v}/ --tag ${TAG_NAME}
         env:
           # Required for the `hub` CLI
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
