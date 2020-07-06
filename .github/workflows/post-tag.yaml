@@ -22,7 +22,7 @@ jobs:
 
       # Steps below assume the bins are in the root of the repo, but make
       # release places them in a versioned directory
-      # TODO: Refactor make targets to get them in sync
+      # TODO: Refactor make targets to get them in sync?
       - name: Copy Relase Binaries
         run: cp ./_release/${TAG_NAME#v}/opa_* ./
 
@@ -35,34 +35,10 @@ jobs:
         run: make release-travis IMAGE_ORG=patrickeast
 
       - name: Create or Update Release
+        run: ./build/github-release.sh
         env:
+          # Required for the `hub` CLI
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-
-        # TODO: Move this into a script & make target
-        run: |
-          set -x
-
-          TAG_NAME="${GITHUB_REF##*/}"
-
-          # Collect a list of opa binaries (look for opa_<platform>_<arch>[extension])
-          ASSETS=()
-          for asset in ./opa_*_*; do
-            ASSETS+=("-a" "$asset")
-          done
-
-          if [[ -z "${ASSETS[@]}" ]]; then
-            echo "No release assets found!"
-            exit 1
-          fi
-
-          if hub release show "${TAG_NAME}" > /dev/null; then
-            # Occurs when the tag is created via GitHub UI w/ a release
-            hub release edit "${ASSETS[@]}" "${TAG_NAME}"
-          else
-            # Create a draft release
-            hub release create "${ASSETS[@]}" -m "${TAG_NAME}" --draft "${TAG_NAME}"
-          fi
-
       - name: Save Artifacts
         uses: actions/upload-artifact@v2
         with:
