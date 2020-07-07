@@ -56,7 +56,6 @@ clone_repo() {
 main() {
     clone_repo
     build_release
-    make test
 }
 
 main
