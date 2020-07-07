@@ -20,7 +20,7 @@ BIN := opa_$(GOOS)_$(GOARCH)
 
 DOCKER_IMAGE ?= openpolicyagent/opa
 
-OPA_S3_RELEASE_BUCKET ?= opa-releases
+S3_RELEASE_BUCKET ?= opa-releases
 
 BUILD_COMMIT := $(shell ./build/get-build-commit.sh)
 BUILD_TIMESTAMP := $(shell ./build/get-build-timestamp.sh)
@@ -265,9 +265,9 @@ push-latest:
 
 .PHONY: push-binary-edge
 push-binary-edge:
-	aws s3 cp $(RELEASE_DIR)/opa_darwin_$(GOARCH) s3://$(OPA_S3_RELEASE_BUCKET)/edge/opa_darwin_$(GOARCH)
-	aws s3 cp $(RELEASE_DIR)/opa_windows_$(GOARCH).exe s3://$(OPA_S3_RELEASE_BUCKET)/edge/opa_windows_$(GOARCH).exe
-	aws s3 cp $(RELEASE_DIR)/opa_linux_$(GOARCH) s3://$(OPA_S3_RELEASE_BUCKET)/edge/opa_linux_$(GOARCH)
+	aws s3 cp $(RELEASE_DIR)/opa_darwin_$(GOARCH) s3://$(S3_RELEASE_BUCKET)/edge/opa_darwin_$(GOARCH)
+	aws s3 cp $(RELEASE_DIR)/opa_windows_$(GOARCH).exe s3://$(S3_RELEASE_BUCKET)/edge/opa_windows_$(GOARCH).exe
+	aws s3 cp $(RELEASE_DIR)/opa_linux_$(GOARCH) s3://$(S3_RELEASE_BUCKET)/edge/opa_linux_$(GOARCH)
 
 .PHONY: tag-edge
 tag-edge:
