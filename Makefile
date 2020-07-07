@@ -75,6 +75,10 @@ go-build: generate
 go-test: generate
 	$(GO) test -tags=slow ./...
 
+.PHONY: test-coverage
+test-coverage:
+	$(GO) test -tags=slow -coverprofile=coverage.txt -covermode=atomic ./...
+
 .PHONY: perf
 perf: generate
 	$(GO) test -run=- -bench=. -benchmem ./...

@@ -25,8 +25,13 @@ jobs:
         uses: actions/checkout@v2
 
       - name: Unit Test Golang
-        run: make travis-go-go-test
+        run: make travis-go-test-coverage
         timeout-minutes: 30
+
+      - name: Codecov Upload
+        uses: codecov/codecov-action@v1
+        with:
+          file: ./coverage.txt
 
   go-perf:
     name: Go Perf
