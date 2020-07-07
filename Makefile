@@ -217,8 +217,7 @@ build-darwin: ensure-release-dir
 .PHONY: build-windows
 build-windows: ensure-release-dir
 	@$(MAKE) build GOOS=windows
-	mv opa_windows_$(GOARCH) opa_windows_$(GOARCH).exe
-	mv opa_windows_$(GOARCH) $(RELEASE_DIR)/
+	mv opa_windows_$(GOARCH) $(RELEASE_DIR)/opa_windows_$(GOARCH).exe
 
 .PHONY: ensure-release-dir
 ensure-release-dir:
