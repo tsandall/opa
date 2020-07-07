@@ -217,8 +217,7 @@ build-darwin: ensure-release-dir
 .PHONY: build-windows
 build-windows: ensure-release-dir
 	@$(MAKE) build GOOS=windows
-	mv opa_windows_$(GOARCH) opa_windows_$(GOARCH).exe
-	mv opa_windows_$(GOARCH) $(RELEASE_DIR)/
+	mv opa_windows_$(GOARCH) $(RELEASE_DIR)/opa_windows_$(GOARCH).exe
 
 .PHONY: ensure-release-dir
 ensure-release-dir:
@@ -266,9 +265,9 @@ push-latest:
 
 .PHONY: push-binary-edge
 push-binary-edge:
-	aws s3 cp opa_darwin_$(GOARCH) s3://$(OPA_S3_RELEASE_BUCKET)/edge/opa_darwin_$(GOARCH)
-	aws s3 cp opa_windows_$(GOARCH).exe s3://$(OPA_S3_RELEASE_BUCKET)/edge/opa_windows_$(GOARCH).exe
-	aws s3 cp opa_linux_$(GOARCH) s3://$(OPA_S3_RELEASE_BUCKET)/edge/opa_linux_$(GOARCH)
+	aws s3 cp $(RELEASE_DIR)/opa_darwin_$(GOARCH) s3://$(OPA_S3_RELEASE_BUCKET)/edge/opa_darwin_$(GOARCH)
+	aws s3 cp $(RELEASE_DIR)/opa_windows_$(GOARCH).exe s3://$(OPA_S3_RELEASE_BUCKET)/edge/opa_windows_$(GOARCH).exe
+	aws s3 cp $(RELEASE_DIR)/opa_linux_$(GOARCH) s3://$(OPA_S3_RELEASE_BUCKET)/edge/opa_linux_$(GOARCH)
 
 .PHONY: tag-edge
 tag-edge:
