@@ -18,7 +18,7 @@ jobs:
         run: echo ::set-env name=TAG_NAME::"${GITHUB_REF##*/}"
 
       - name: Build Release Binaries
-        run: make release VERSION=${TAG_NAME#v}
+        run: make release
 
       - name: Build and Deploy OPA Docker Images
         env:
