@@ -215,7 +215,7 @@ build-darwin: ensure-release-dir
 	mv opa_darwin_$(GOARCH) $(RELEASE_DIR)/
 
 .PHONY: build-windows
-	build-windows: ensure-release-dir
+build-windows: ensure-release-dir
 	@$(MAKE) build GOOS=windows
 	mv opa_windows_$(GOARCH) opa_windows_$(GOARCH).exe
 	mv opa_windows_$(GOARCH) $(RELEASE_DIR)/
@@ -225,7 +225,7 @@ ensure-release-dir:
 	mkdir -p $(RELEASE_DIR)
 
 .PHONY: build-all-platforms
-build-all: build-linux build-darwin build-windows
+build-all-platforms: build-linux build-darwin build-windows
 
 .PHONY: image-quick
 image-quick:
