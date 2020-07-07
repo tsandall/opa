@@ -28,7 +28,7 @@ BUILD_HOSTNAME := $(shell ./build/get-build-hostname.sh)
 
 RELEASE_BUILD_IMAGE := golang:$(GOVERSION)
 
-RELEASE_DIR := _release/$(VERSION)
+RELEASE_DIR ?= _release/$(VERSION)
 
 LDFLAGS := "-X github.com/open-policy-agent/opa/version.Version=$(VERSION) \
 	-X github.com/open-policy-agent/opa/version.Vcs=$(BUILD_COMMIT) \
@@ -193,9 +193,9 @@ TRAVIS_GOLANG_DOCKER_MAKE := $(DOCKER) run \
 travis-go-%:
 	$(TRAVIS_GOLANG_DOCKER_MAKE) $*
 
-.PHONY: travis-release-build
-travis-release-build:
-	$(TRAVIS_GOLANG_DOCKER_MAKE) build-all-platforms go-test check wasm travis-check-working-copy
+.PHONY: travis-release-test
+travis-release-test:
+	$(TRAVIS_GOLANG_DOCKER_MAKE) go-test check wasm travis-check-working-copy
 
 .PHONY: travis-check-working-copy
 travis-check-working-copy: generate

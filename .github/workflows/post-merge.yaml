@@ -13,9 +13,12 @@ jobs:
       - name: Check out code
         uses: actions/checkout@v2
 
-      - name: Build and Test
-        run: make travis-release-build
+      - name: Test
+        run: make travis-release-test
         timeout-minutes: 60
+
+      - name: Build Release Binaries
+        run: make local-release
 
       - name: Deploy OPA Edge
         env:

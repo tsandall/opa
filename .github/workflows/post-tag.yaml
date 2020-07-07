@@ -17,6 +17,10 @@ jobs:
         # Subsequent jobs will be have the computed tag name
         run: echo ::set-env name=TAG_NAME::"${GITHUB_REF##*/}"
 
+      - name: Test
+        run: make travis-release-test
+        timeout-minutes: 60
+
       - name: Build Release Binaries
         run: make release
 
@@ -25,7 +29,8 @@ jobs:
           DOCKER_USER: ${{ secrets.DOCKER_USER }}
           DOCKER_PASSWORD: ${{ secrets.DOCKER_PASSWORD }}
           DOCKER_IMAGE: ${{ secrets.DOCKER_IMAGE }}
-        run: pwd; find .; make release-travis
+        # TODO: Remove extra junk here...
+        run: pwd; find ./_release; make release-travis
 
       - name: Create or Update Release
         env:
