@@ -20,25 +20,19 @@ jobs:
       - name: Build Release Binaries
         run: make release VERSION=${TAG_NAME#v}
 
-      # Steps below assume the bins are in the root of the repo, but make
-      # release places them in a versioned directory
-      # TODO: Refactor make targets to get them in sync?
-      - name: Copy Relase Binaries
-        run: cp ./_release/${TAG_NAME#v}/opa_* ./
-
       - name: Build and Deploy OPA Docker Images
         env:
           DOCKER_USER: ${{ secrets.DOCKER_USER }}
           DOCKER_PASSWORD: ${{ secrets.DOCKER_PASSWORD }}
-        # TODO: Remove image org override
-        #run: make deploy-travis
-        run: make release-travis IMAGE_ORG=patrickeast
+          DOCKER_IMAGE: ${{ secrets.DOCKER_IMAGE }}
+        run: make release-travis
 
       - name: Create or Update Release
-        run: ./build/github-release.sh --asset-dir ./_release/${TAG_NAME#v}/ --tag ${TAG_NAME}
         env:
           # Required for the `hub` CLI
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: ./build/github-release.sh --asset-dir ./_release/${TAG_NAME#v}/ --tag ${TAG_NAME}
+
       - name: Save Artifacts
         uses: actions/upload-artifact@v2
         with:

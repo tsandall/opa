@@ -3,27 +3,59 @@ name: PR Check
 on: [pull_request]
 
 jobs:
-  # TODO: We can split this into separate build, test, perf, and check jobs that
-  # run in parallel to lower overall runtime of PR checks and give a nicer UI on
-  # the reviews. See separate WASM step below for an example.
-  go:
-    name: Go
+  # All jobs essentially re-create the `travis-release-build` make target, but are split
+  # up for parallel runners for faster PR feedback and a nicer UX.
+
+  go-build:
+    name: Go Build
     runs-on: ubuntu-18.04
     steps:
       - name: Check out code
         uses: actions/checkout@v2
 
-      - name: Build and Test Golang
-        run: make travis-go
+      - name: Build Golang
+        run: make travis-go-build-all-platforms
         timeout-minutes: 30
 
       - name: Save Artifacts
         uses: actions/upload-artifact@v2
         with:
           name: OPA Binaries
-          path: opa_*
+          path: ./_release
 
-  # WebAssembly build and tests workflow, can run independent of other workflows.
+  go-test:
+    name: Go Test
+    runs-on: ubuntu-18.04
+    steps:
+      - name: Check out code
+        uses: actions/checkout@v2
+
+      - name: Unit Test Golang
+        run: make travis-go-go-test
+        timeout-minutes: 30
+
+  go-perf:
+    name: Go Perf
+    runs-on: ubuntu-18.04
+    steps:
+      - name: Check out code
+        uses: actions/checkout@v2
+
+      - name: Benchmark Test Golang
+        run: make travis-go-perf
+        timeout-minutes: 30
+
+  go-lint:
+    name: Go Lint
+    runs-on: ubuntu-18.04
+    steps:
+      - name: Check out code
+        uses: actions/checkout@v2
+
+      - name: Golang Style and Lint Check
+        run: make travis-go-check
+        timeout-minutes: 30
+
   wasm:
     name: WASM
     runs-on: ubuntu-18.04
@@ -33,4 +65,15 @@ jobs:
 
       - name: Build and Test WASM
         run: make travis-wasm
+        timeout-minutes: 15
+
+  check-generated:
+    name: Check Generated
+    runs-on: ubuntu-18.04
+    steps:
+      - name: Check out code
+        uses: actions/checkout@v2
+
+      - name: Check Working Copy
+        run: make travis-check-working-copy
         timeout-minutes: 15
