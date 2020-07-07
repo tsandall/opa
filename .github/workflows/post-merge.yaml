@@ -18,7 +18,7 @@ jobs:
         timeout-minutes: 60
 
       - name: Build Release Binaries
-        run: make local-release
+        run: make release-local
 
       - name: Deploy OPA Edge
         env:
