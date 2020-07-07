@@ -28,7 +28,7 @@ BUILD_HOSTNAME := $(shell ./build/get-build-hostname.sh)
 
 RELEASE_BUILD_IMAGE := golang:$(GOVERSION)
 
-RELEASE_DIR := ./_releases/$(VERSION)
+RELEASE_DIR := _release/$(VERSION)
 
 LDFLAGS := "-X github.com/open-policy-agent/opa/version.Version=$(VERSION) \
 	-X github.com/open-policy-agent/opa/version.Vcs=$(BUILD_COMMIT) \
@@ -320,18 +320,18 @@ netlify-preview: clean docs-clean build docs-live-blocks-install-deps docs-live-
 .PHONY: release
 release:
 	$(DOCKER) run --rm \
-		-v $(PWD)/_release/$(VERSION):/_release/$(VERSION) \
+		-v $(PWD)/$(RELEASE_DIR):/$(RELEASE_DIR) \
 		-v $(PWD):/_src \
 		$(RELEASE_BUILD_IMAGE) \
-		/_src/build/build-release.sh --version=$(VERSION) --output-dir=/_release/$(VERSION) --source-url=/_src
+		/_src/build/build-release.sh --version=$(VERSION) --output-dir=/$(RELEASE_DIR) --source-url=/_src
 
 .PHONY: release-local
 release-local:
 	$(DOCKER) run --rm \
-		-v $(PWD)/_release/$(VERSION):/_release/$(VERSION) \
+		-v $(PWD)/$(RELEASE_DIR):/$(RELEASE_DIR) \
 		-v $(PWD):/_src \
 		$(RELEASE_BUILD_IMAGE) \
-		/_src/build/build-release.sh --output-dir=/_release/$(VERSION) --source-url=/_src
+		/_src/build/build-release.sh --output-dir=/$(RELEASE_DIR) --source-url=/_src
 
 .PHONY: release-patch
 release-patch:
