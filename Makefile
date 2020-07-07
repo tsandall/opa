@@ -191,7 +191,7 @@ travis-go-%:
 
 .PHONY: travis-release-build
 travis-release-build:
-	$(TRAVIS_GOLANG_DOCKER_MAKE) build-all-platforms go-test check wasm check-working-copy
+	$(TRAVIS_GOLANG_DOCKER_MAKE) build-all-platforms go-test check wasm travis-check-working-copy
 
 .PHONY: travis-check-working-copy
 travis-check-working-copy: generate
