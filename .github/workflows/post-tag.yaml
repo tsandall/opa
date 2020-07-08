@@ -29,8 +29,7 @@ jobs:
           DOCKER_USER: ${{ secrets.DOCKER_USER }}
           DOCKER_PASSWORD: ${{ secrets.DOCKER_PASSWORD }}
           DOCKER_IMAGE: ${{ secrets.DOCKER_IMAGE }}
-        # TODO: Remove extra junk here...
-        run: pwd; find ./_release; make release-travis
+        run: make release-travis
 
       - name: Create or Update Release
         env:

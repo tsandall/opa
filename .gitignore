@@ -16,6 +16,7 @@ policy.wasm
 .npm
 .gitbook
 .go
+release-notes.md
 
 # ci artifacts
 fuzzit
