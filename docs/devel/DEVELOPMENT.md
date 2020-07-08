@@ -143,3 +143,22 @@ files in the root of this repository:
 
 * `.go-version`- which is used by the Makefile and CI tooling. Put the exact go
   version that OPA should use.
+
+# CI Configuration
+
+OPA uses Github Actions defined in the [.github/workflows](../../.github/workflows)
+directory.
+
+## Required Secrets
+
+The following secrets are assumed to be configured for the Repository. Any fork of
+OPA will need to have them configured to be able to run the full CI workflow.
+
+| Name | Required | Description |
+|------|----------|-------------|
+| S3_RELEASE_BUCKET | No | AWS S3 Bucket name to upload `edge` release binaries to. Defaults to `opa-releases`. |
+| AWS_ACCESS_KEY_ID | Yes | AWS credentials required to upload to the configured `S3_RELEASE_BUCKET`. |
+| AWS_SECRET_ACCESS_KEY | Yes | AWS credentials required to upload to the configured `S3_RELEASE_BUCKET`. |
+| DOCKER_IMAGE | No | Full docker image name (with org) to tag and publish images to. Defaults to `openpolicyagent/opa`. |
+| DOCKER_USER | Yes | Docker username for uploading release images. Will be used with `docker login` |
+| DOCKER_PASSWORD | Yes | Docker password or API token for the configured `DOCKER_USER`. Will be used with `docker login` |
