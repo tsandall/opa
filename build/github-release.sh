@@ -38,7 +38,7 @@ done
 RELEASE_NOTES="release-notes.md"
 
 # The hub CLI expects the first line to be the title
-echo -e "${TAG_NAME}\n" > RELEASE_NOTES
+echo -e "${TAG_NAME}\n" > "${RELEASE_NOTES}"
 
 # Fill in the description
 ./build/latest-release-notes.sh --output="${RELEASE_NOTES}"
