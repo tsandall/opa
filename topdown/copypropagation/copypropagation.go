@@ -5,6 +5,7 @@
 package copypropagation
 
 import (
+	"fmt"
 	"sort"
 
 	"github.com/open-policy-agent/opa/ast"
@@ -67,6 +68,11 @@ func (p *CopyPropagator) Apply(query ast.Body) ast.Body {
 
 	result := ast.NewBody()
 
+	// fmt.Println("query:", query)
+	// defer func() {
+	// 	fmt.Println("result:", result)
+	// }()
+
 	uf, ok := makeDisjointSets(p.livevars, query)
 	if !ok {
 		return query
@@ -100,7 +106,12 @@ func (p *CopyPropagator) Apply(query ast.Body) ast.Body {
 			headvars:   headvars,
 		}
 
-		if expr, keep := p.plugBindings(pctx, expr); keep {
+		fmt.Println("  expr:", expr)
+		expr, keep := p.plugBindings(pctx, expr)
+		fmt.Println("    plugged:", expr, "keep:", keep)
+
+		if keep {
+			fmt.Println("update:", expr)
 			if p.updateBindings(pctx, expr) {
 				result.Append(expr)
 			}
@@ -193,8 +204,11 @@ func (p *CopyPropagator) plugBindings(pctx *plugContext, expr *ast.Expr) (*ast.E
 	// re-added during post-processing if needed.
 	if term, ok := expr.Terms.(*ast.Term); ok {
 		if v, ok := term.Value.(ast.Var); ok {
-			if root, ok := pctx.uf.Find(v); ok {
+			root, ok := pctx.uf.Find(v)
+			fmt.Println("UF:", v, "root:", root, "ok:", ok)
+			if ok {
 				if b := pctx.removedEqs.Get(root.key); b != nil {
+					fmt.Println("  skip:", root.key)
 					return nil, false
 				}
 			}

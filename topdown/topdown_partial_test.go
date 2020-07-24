@@ -2221,6 +2221,28 @@ func TestTopDownPartialEval(t *testing.T) {
 			},
 			wantQueries: []string{`input.foo`, `input.foo`},
 		},
+		{
+			note:  "XXX",
+			query: "data.test.p",
+			modules: []string{`
+				package test
+
+				p { input = a; a }
+			`},
+			wantQueries: []string{},
+		},
+		// {
+		// 	note:  "XXX",
+		// 	query: "data.test.p",
+		// 	modules: []string{`
+		// 		package test
+
+		// 		f(x) = y { y = x == 1 }
+
+		// 		p { f(input) }
+		// 	`},
+		// 	wantQueries: []string{},
+		// },
 	}
 
 	ctx := context.Background()
@@ -2270,10 +2292,10 @@ func TestTopDownPartialEval(t *testing.T) {
 			query.genvarprefix = "x"
 
 			partials, support, err := query.PartialRun(ctx)
+			PrettyTrace(os.Stdout, buf)
 
 			if err != nil {
 				if buf != nil {
-					PrettyTrace(os.Stdout, buf)
 				}
 				t.Fatal(err)
 			}

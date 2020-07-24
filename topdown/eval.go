@@ -1510,6 +1510,12 @@ func (e evalFunc) evalOneRule(iter unifyIterator, rule *ast.Rule, prev *ast.Term
 			result = child.bindings.Plug(rule.Head.Value)
 
 			if len(rule.Head.Args) == len(e.terms)-1 {
+				if e.e.saveSet.ContainsRecursive(rule.Head.Value, child.bindings) {
+					fmt.Println("save:", rule.Head.Value)
+					err := e.e.saveExpr(ast.NewExpr(rule.Head.Value), child.bindings, iter)
+					child.traceRedo(rule)
+					return err
+				}
 				if result.Value.Compare(ast.Boolean(false)) == 0 {
 					return nil
 				}
