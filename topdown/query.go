@@ -7,6 +7,7 @@ import (
 	"sort"
 	"time"
 
+	"github.com/open-policy-agent/opa/resolver"
 	"github.com/open-policy-agent/opa/topdown/cache"
 
 	"github.com/open-policy-agent/opa/ast"
@@ -34,6 +35,7 @@ type Query struct {
 	store                  storage.Store
 	txn                    storage.Transaction
 	input                  *ast.Term
+	external               *resolverTrie
 	tracers                []QueryTracer
 	plugTraceVars          bool
 	unknowns               []*ast.Term
@@ -62,6 +64,7 @@ func NewQuery(query ast.Body) *Query {
 		query:        query,
 		genvarprefix: ast.WildcardPrefix,
 		indexing:     true,
+		external:     newResolverTrie(),
 	}
 }
 
@@ -226,6 +229,11 @@ func (q *Query) WithInterQueryBuiltinCache(c cache.InterQueryCache) *Query {
 	return q
 }
 
+func (q *Query) WithResolver(ref ast.Ref, r resolver.Resolver) *Query {
+	q.external.Put(ref, r)
+	return q
+}
+
 // PartialRun executes partial evaluation on the query with respect to unknown
 // values. Partial evaluation attempts to evaluate as much of the query as
 // possible without requiring values for the unknowns set on the query. The
@@ -265,6 +273,7 @@ func (q *Query) PartialRun(ctx context.Context) (partials []ast.Body, support []
 		targetStack:            newRefStack(),
 		txn:                    q.txn,
 		input:                  q.input,
+		external:               q.external,
 		tracers:                q.tracers,
 		traceEnabled:           len(q.tracers) > 0,
 		plugTraceVars:          q.plugTraceVars,
@@ -385,6 +394,7 @@ func (q *Query) Iter(ctx context.Context, iter func(QueryResult) error) error {
 		targetStack:            newRefStack(),
 		txn:                    q.txn,
 		input:                  q.input,
+		external:               q.external,
 		tracers:                q.tracers,
 		traceEnabled:           len(q.tracers) > 0,
 		plugTraceVars:          q.plugTraceVars,
