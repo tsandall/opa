@@ -33,7 +33,7 @@ import (
 // Common file extensions and file names.
 const (
 	RegoExt               = ".rego"
-	WasmFile              = "/policy.wasm"
+	WasmFile              = "policy.wasm"
 	ManifestExt           = ".manifest"
 	SignaturesFile        = "signatures.json"
 	dataFile              = "data.json"
@@ -44,11 +44,12 @@ const (
 
 // Bundle represents a loaded bundle. The bundle can contain data and policies.
 type Bundle struct {
-	Signatures SignaturesConfig
-	Manifest   Manifest
-	Data       map[string]interface{}
-	Modules    []ModuleFile
-	Wasm       []byte
+	Signatures  SignaturesConfig
+	Manifest    Manifest
+	Data        map[string]interface{}
+	Modules     []ModuleFile
+	Wasm        []byte // Deprecated. Use WasmModules instead
+	WasmModules []WasmModuleFile
 }
 
 // SignaturesConfig represents an array of JWTs that encapsulate the signatures for the bundle.
@@ -89,8 +90,15 @@ func NewFile(name, hash, alg string) FileInfo {
 // Manifest represents the manifest from a bundle. The manifest may contain
 // metadata such as the bundle revision.
 type Manifest struct {
-	Revision string    `json:"revision"`
-	Roots    *[]string `json:"roots,omitempty"`
+	Revision      string         `json:"revision"`
+	Roots         *[]string      `json:"roots,omitempty"`
+	WasmResolvers []WasmResolver `json:"wasm,omitempty"`
+}
+
+// WasmResolver maps a wasm module to an entrypoint ref.
+type WasmResolver struct {
+	Entrypoint string `json:"entrypoint,omitempty"`
+	Module     string `json:"module,omitempty"`
 }
 
 // Init initializes the manifest. If you instantiate a manifest
@@ -121,6 +129,16 @@ func (m Manifest) Equal(other Manifest) bool {
 		return false
 	}
 
+	if len(m.WasmResolvers) != len(other.WasmResolvers) {
+		return false
+	}
+
+	for i := 0; i < len(m.WasmResolvers); i++ {
+		if m.WasmResolvers[i] != other.WasmResolvers[i] {
+			return false
+		}
+	}
+
 	return m.rootSet().Equal(other.rootSet())
 }
 
@@ -130,12 +148,17 @@ func (m Manifest) Copy() Manifest {
 	roots := make([]string, len(*m.Roots))
 	copy(roots, *m.Roots)
 	m.Roots = &roots
+
+	wasmModules := make([]WasmResolver, len(m.WasmResolvers))
+	copy(wasmModules, m.WasmResolvers)
+	m.WasmResolvers = wasmModules
+
 	return m
 }
 
 func (m Manifest) String() string {
 	m.Init()
-	return fmt.Sprintf("<revision: %q, roots: %v>", m.Revision, *m.Roots)
+	return fmt.Sprintf("<revision: %q, roots: %v, wasm: %+v>", m.Revision, *m.Roots, m.WasmResolvers)
 }
 
 func (m Manifest) rootSet() stringSet {
@@ -198,6 +221,40 @@ func (m *Manifest) validateAndInjectDefaults(b Bundle) error {
 		}
 	}
 
+	// Build a set of wasm module entrypoints to validate
+	wasmModuleToEps := map[string]string{}
+	seenEps := map[string]struct{}{}
+	for _, wm := range b.WasmModules {
+		wasmModuleToEps[wm.Path] = ""
+	}
+
+	for _, wmConfig := range b.Manifest.WasmResolvers {
+		_, ok := wasmModuleToEps[wmConfig.Module]
+		if !ok {
+			return fmt.Errorf("manifest references wasm module '%s' but the module file does not exist", wmConfig.Module)
+		}
+
+		// Ensure wasm module entrypoint in within bundle roots
+		found := false
+		for i := range roots {
+			if strings.HasPrefix(wmConfig.Entrypoint, roots[i]) {
+				found = true
+				break
+			}
+		}
+
+		if !found {
+			return fmt.Errorf("manifest roots %v do not permit '%v' entrypoint for wasm module '%v'", roots, wmConfig.Entrypoint, wmConfig.Module)
+		}
+
+		if _, ok := seenEps[wmConfig.Entrypoint]; ok {
+			return fmt.Errorf("entrypoint '%s' cannot be used by more than one wasm module", wmConfig.Entrypoint)
+		}
+		seenEps[wmConfig.Entrypoint] = struct{}{}
+
+		wasmModuleToEps[wmConfig.Module] = wmConfig.Entrypoint
+	}
+
 	// Validate data in bundle.
 	return dfs(b.Data, "", func(path string, node interface{}) (bool, error) {
 		path = strings.Trim(path, "/")
@@ -217,12 +274,20 @@ func (m *Manifest) validateAndInjectDefaults(b Bundle) error {
 	})
 }
 
-// ModuleFile represents a single module contained a bundle.
+// ModuleFile represents a single module contained in a bundle.
 type ModuleFile struct {
 	URL    string
 	Path   string
 	Raw    []byte
 	Parsed *ast.Module
+}
+
+// WasmModule represents a single wasm module contained in a bundle.
+type WasmModuleFile struct {
+	URL        string
+	Path       string
+	Entrypoint ast.Ref
+	Raw        []byte
 }
 
 // Reader contains the reader to load the bundle from.
@@ -361,9 +426,17 @@ func (r *Reader) Read() (Bundle, error) {
 			}
 			bundle.Modules = append(bundle.Modules, mf)
 
-		} else if path == WasmFile {
-			bundle.Wasm = buf.Bytes()
+		} else if filepath.Base(path) == WasmFile {
+			// For backwards compatibility
+			if path == "/"+WasmFile {
+				bundle.Wasm = buf.Bytes()
+			}
 
+			bundle.WasmModules = append(bundle.WasmModules, WasmModuleFile{
+				URL:  f.URL(),
+				Path: r.fullPath(path),
+				Raw:  buf.Bytes(),
+			})
 		} else if filepath.Base(path) == dataFile {
 			var value interface{}
 
@@ -413,6 +486,20 @@ func (r *Reader) Read() (Bundle, error) {
 
 	if err := bundle.Manifest.validateAndInjectDefaults(bundle); err != nil {
 		return bundle, err
+	}
+
+	// Inject the wasm module entrypoint refs into the WasmModuleFile structs
+	epMap := map[string]string{}
+	for _, r := range bundle.Manifest.WasmResolvers {
+		epMap[r.Module] = r.Entrypoint
+	}
+	for i := 0; i < len(bundle.WasmModules); i++ {
+		entrypoint := epMap[bundle.WasmModules[i].Path]
+		ref, err := ast.PtrRef(ast.DefaultRootDocument, entrypoint)
+		if err != nil {
+			return bundle, fmt.Errorf("failed to parse wasm module entrypoint '%s': %s", entrypoint, err)
+		}
+		bundle.WasmModules[i].Entrypoint = ref
 	}
 
 	if r.includeManifestInData {
@@ -550,7 +637,7 @@ func (w *Writer) Write(bundle Bundle) error {
 		}
 	}
 
-	if err := writeWasm(tw, bundle); err != nil {
+	if err := w.writeWasm(tw, bundle); err != nil {
 		return err
 	}
 
@@ -569,12 +656,27 @@ func (w *Writer) Write(bundle Bundle) error {
 	return gw.Close()
 }
 
-func writeWasm(tw *tar.Writer, bundle Bundle) error {
-	if len(bundle.Wasm) == 0 {
-		return nil
+func (w *Writer) writeWasm(tw *tar.Writer, bundle Bundle) error {
+	for _, wm := range bundle.WasmModules {
+		path := wm.URL
+		if w.usePath {
+			path = wm.Path
+		}
+
+		err := archive.WriteFile(tw, path, wm.Raw)
+		if err != nil {
+			return err
+		}
 	}
 
-	return archive.WriteFile(tw, WasmFile, bundle.Wasm)
+	if len(bundle.Wasm) > 0 {
+		err := archive.WriteFile(tw, "/"+WasmFile, bundle.Wasm)
+		if err != nil {
+			return err
+		}
+	}
+
+	return nil
 }
 
 func writeManifest(tw *tar.Writer, bundle Bundle) error {
@@ -848,9 +950,7 @@ func mktree(path []string, value interface{}) (map[string]interface{}, error) {
 // Merge accepts a set of bundles and merges them into a single result bundle. If there are
 // any conflicts during the merge (e.g., with roots) an error is returned. The result bundle
 // will have an empty revision except in the special case where a single bundle is provided
-// (and in that case the bundle is just returned unmodified.) Merge currently returns an error
-// if multiple bundles are provided and any of those bundles contain wasm modules (because
-// wasm module merging is not implemented.)
+// (and in that case the bundle is just returned unmodified.)
 func Merge(bundles []*Bundle) (*Bundle, error) {
 
 	if len(bundles) == 0 {
@@ -872,10 +972,6 @@ func Merge(bundles []*Bundle) (*Bundle, error) {
 
 		roots = append(roots, *b.Manifest.Roots...)
 
-		if len(b.Wasm) > 0 {
-			return nil, errors.New("wasm bundles cannot be merged")
-		}
-
 		result.Modules = append(result.Modules, b.Modules...)
 
 		for _, root := range *b.Manifest.Roots {
@@ -886,6 +982,10 @@ func Merge(bundles []*Bundle) (*Bundle, error) {
 				}
 			}
 		}
+
+		result.Manifest.WasmResolvers = append(result.Manifest.WasmResolvers, b.Manifest.WasmResolvers...)
+		result.WasmModules = append(result.WasmModules, b.WasmModules...)
+
 	}
 
 	result.Manifest.Roots = &roots

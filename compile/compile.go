@@ -10,8 +10,11 @@ import (
 	"context"
 	"fmt"
 	"io"
+	"io/ioutil"
+	"path/filepath"
 	"regexp"
 	"sort"
+	"strings"
 
 	"github.com/open-policy-agent/opa/internal/wasm/encoding"
 
@@ -429,6 +432,44 @@ func (c *Compiler) compileWasm(ctx context.Context) error {
 	}
 
 	c.bundle.Wasm = buf.Bytes()
+
+	modulePath := bundle.WasmFile
+
+	c.bundle.WasmModules = append(c.bundle.WasmModules, bundle.WasmModuleFile{
+		URL:  modulePath,
+		Path: modulePath,
+		Raw:  buf.Bytes(),
+	})
+
+	// Each entrypoint needs an entry in the manifest along with the
+	// original rule(s) removed from the remaining rego modules.
+	for i := range c.entrypointrefs {
+
+		c.bundle.Manifest.WasmResolvers = append(c.bundle.Manifest.WasmResolvers, bundle.WasmResolver{
+			Module:     "/" + strings.TrimLeft(modulePath, "/"),
+			Entrypoint: c.entrypoints[i],
+		})
+
+		for i := 0; i < len(c.bundle.Modules); i++ {
+			mf := &c.bundle.Modules[i]
+
+			// Drop any rules that match the entrypoint path.
+			var rules []*ast.Rule
+			for _, rule := range mf.Parsed.Rules {
+				if !rule.Path().Equal(c.entrypointrefs[i].Value) {
+					rules = append(rules, rule)
+				}
+			}
+
+			// If any rules were dropped update the module accordingly
+			if len(rules) != len(mf.Parsed.Rules) {
+				mf.Parsed.Rules = rules
+				// Remove the original raw source, we're editing the AST
+				// directly so it wont be in sync anymore.
+				mf.Raw = nil
+			}
+		}
+	}
 
 	return nil
 }
