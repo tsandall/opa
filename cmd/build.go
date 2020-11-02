@@ -108,7 +108,7 @@ The 'build' command supports targets (specified by -t):
 
     wasm    The wasm target emits a bundle containing a WebAssembly module compiled from
             the input files for each specified entrypoint. The bundle may contain the
-		    original policy or data files.
+            original policy or data files.
 
 The -e flag tells the 'build' command which documents will be queried by the software
 asking for policy decisions, so that it can focus optimization efforts and ensure
