@@ -282,7 +282,7 @@ type ModuleFile struct {
 	Parsed *ast.Module
 }
 
-// WasmModule represents a single wasm module contained in a bundle.
+// WasmModuleFile represents a single wasm module contained in a bundle.
 type WasmModuleFile struct {
 	URL        string
 	Path       string

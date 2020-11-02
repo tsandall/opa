@@ -19,6 +19,7 @@ import (
 	"github.com/open-policy-agent/opa/util"
 )
 
+// BundlesBasePath is the storage path used for storing bundle metadata
 var BundlesBasePath = storage.MustParsePath("/system/bundles")
 
 // Note: As needed these helpers could be memoized.
@@ -125,6 +126,7 @@ func eraseWasmModulesFromStore(ctx context.Context, store storage.Store, txn sto
 	return nil
 }
 
+// ReadWasmMetadataFromStore will read Wasm module resolver metadata from the store.
 func ReadWasmMetadataFromStore(ctx context.Context, store storage.Store, txn storage.Transaction, name string) ([]WasmResolver, error) {
 	path := wasmEntrypointsPath(name)
 	value, err := store.Read(ctx, txn, path)
@@ -147,6 +149,7 @@ func ReadWasmMetadataFromStore(ctx context.Context, store storage.Store, txn sto
 	return wasmMetadata, nil
 }
 
+// ReadWasmModulesFromStore will write Wasm module resolver metadata from the store.
 func ReadWasmModulesFromStore(ctx context.Context, store storage.Store, txn storage.Transaction, name string) (map[string][]byte, error) {
 	path := wasmModulePath(name)
 	value, err := store.Read(ctx, txn, path)
