@@ -10,8 +10,6 @@ import (
 	"context"
 	"fmt"
 	"io"
-	"io/ioutil"
-	"path/filepath"
 	"regexp"
 	"sort"
 	"strings"
@@ -443,11 +441,12 @@ func (c *Compiler) compileWasm(ctx context.Context) error {
 
 	// Each entrypoint needs an entry in the manifest along with the
 	// original rule(s) removed from the remaining rego modules.
-	for i := range c.entrypointrefs {
+	for i, entrypoint := range c.entrypointrefs {
+		entrypointPath := c.entrypoints[i]
 
 		c.bundle.Manifest.WasmResolvers = append(c.bundle.Manifest.WasmResolvers, bundle.WasmResolver{
 			Module:     "/" + strings.TrimLeft(modulePath, "/"),
-			Entrypoint: c.entrypoints[i],
+			Entrypoint: entrypointPath,
 		})
 
 		for i := 0; i < len(c.bundle.Modules); i++ {
@@ -456,7 +455,7 @@ func (c *Compiler) compileWasm(ctx context.Context) error {
 			// Drop any rules that match the entrypoint path.
 			var rules []*ast.Rule
 			for _, rule := range mf.Parsed.Rules {
-				if !rule.Path().Equal(c.entrypointrefs[i].Value) {
+				if !rule.Path().Equal(entrypoint.Value) {
 					rules = append(rules, rule)
 				}
 			}

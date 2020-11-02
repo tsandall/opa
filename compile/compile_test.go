@@ -454,8 +454,25 @@ func TestCompilerWasmTargetMultipleEntrypoints(t *testing.T) {
 			t.Fatal(err)
 		}
 
-		if len(compiler.bundle.WasmModules) != 2 {
-			t.Fatalf("expected 2 Wasm modules, got: %d", len(compiler.bundle.WasmModules))
+		if len(compiler.bundle.WasmModules) != 1 {
+			t.Fatalf("expected 1 Wasm modules, got: %d", len(compiler.bundle.WasmModules))
+		}
+
+		expManifest := bundle.Manifest{}
+		expManifest.Init()
+		expManifest.WasmResolvers = []bundle.WasmResolver{
+			{
+				Entrypoint: "test/p",
+				Module: "/policy.wasm",
+			},
+			{
+				Entrypoint: "policy/authz",
+				Module: "/policy.wasm",
+			},
+		}
+
+		if !compiler.bundle.Manifest.Equal(expManifest) {
+			t.Fatalf("\nExpected manifest: %+v\nGot: %+v\n", expManifest, compiler.bundle.Manifest)
 		}
 
 		ensureEntrypointRemoved(t, compiler.bundle, "test/p")
