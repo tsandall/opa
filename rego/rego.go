@@ -260,7 +260,7 @@ func (pq preparedQuery) newEvalContext(ctx context.Context, options []EvalOption
 		parsedUnknowns:   pq.r.parsedUnknowns,
 		compiledQuery:    compiledQuery{},
 		indexing:         true,
-		resolvers:        nil,
+		resolvers:        pq.r.resolvers,
 	}
 
 	for _, o := range options {
