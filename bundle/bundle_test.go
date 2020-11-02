@@ -946,7 +946,7 @@ func TestHashBundleFiles(t *testing.T) {
 	for name, tc := range tests {
 		t.Run(name, func(t *testing.T) {
 
-			f, err := hashBundleFiles(h, tc.data, tc.manifest, tc.wasm)
+			f, err := hashBundleFiles(h, &Bundle{Data: tc.data, Manifest: tc.manifest, Wasm: tc.wasm})
 			if err != nil {
 				t.Fatal("Unexpected error:", err)
 			}

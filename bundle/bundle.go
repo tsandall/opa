@@ -704,29 +704,37 @@ func writeSignatures(tw *tar.Writer, bundle Bundle) error {
 	return archive.WriteFile(tw, fmt.Sprintf(".%v", SignaturesFile), bs)
 }
 
-func hashBundleFiles(hash SignatureHasher, data map[string]interface{}, manifest Manifest, wasm []byte) ([]FileInfo, error) {
+func hashBundleFiles(hash SignatureHasher, b *Bundle) ([]FileInfo, error) {
 
 	files := []FileInfo{}
 
-	bytes, err := hash.HashFile(data)
+	bs, err := hash.HashFile(b.Data)
 	if err != nil {
 		return files, err
 	}
-	files = append(files, NewFile(strings.TrimPrefix("data.json", "/"), hex.EncodeToString(bytes), defaultHashingAlg))
+	files = append(files, NewFile(strings.TrimPrefix("data.json", "/"), hex.EncodeToString(bs), defaultHashingAlg))
 
-	if len(wasm) != 0 {
-		bytes, err := hash.HashFile(wasm)
+	if len(b.Wasm) != 0 {
+		bs, err := hash.HashFile(b.Wasm)
 		if err != nil {
 			return files, err
 		}
-		files = append(files, NewFile(strings.TrimPrefix(WasmFile, "/"), hex.EncodeToString(bytes), defaultHashingAlg))
+		files = append(files, NewFile(strings.TrimPrefix(WasmFile, "/"), hex.EncodeToString(bs), defaultHashingAlg))
 	}
 
-	bytes, err = hash.HashFile(manifest)
+	for _, wasmModule := range b.WasmModules {
+		bs, err := hash.HashFile(wasmModule.Raw)
+		if err != nil {
+			return files, err
+		}
+		files = append(files, NewFile(strings.TrimPrefix(wasmModule.Path, "/"), hex.EncodeToString(bs), defaultHashingAlg))
+	}
+
+	bs, err = hash.HashFile(b.Manifest)
 	if err != nil {
 		return files, err
 	}
-	files = append(files, NewFile(strings.TrimPrefix(ManifestExt, "/"), hex.EncodeToString(bytes), defaultHashingAlg))
+	files = append(files, NewFile(strings.TrimPrefix(ManifestExt, "/"), hex.EncodeToString(bs), defaultHashingAlg))
 
 	return files, err
 }
@@ -780,7 +788,7 @@ func (b *Bundle) GenerateSignature(signingConfig *SigningConfig, keyID string, u
 		files = append(files, NewFile(strings.TrimPrefix(path, "/"), hex.EncodeToString(bytes), defaultHashingAlg))
 	}
 
-	result, err := hashBundleFiles(hash, b.Data, b.Manifest, b.Wasm)
+	result, err := hashBundleFiles(hash, b)
 	if err != nil {
 		return err
 	}
