@@ -307,6 +307,13 @@ func (m *Manager) Init(ctx context.Context) error {
 		}
 
 		SetCompilerOnContext(params.Context, result.Compiler)
+
+		resolvers, err := bundle.LoadWasmResolversFromStore(ctx, m.Store, txn, nil)
+		if err != nil {
+			return err
+		}
+		SetWasmResolversOnContext(params.Context, resolvers)
+
 		_, err = m.Store.Register(ctx, txn, storage.TriggerConfig{OnCommit: m.onCommit})
 		return err
 	})
