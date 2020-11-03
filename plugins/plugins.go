@@ -16,6 +16,7 @@ import (
 	"github.com/open-policy-agent/opa/ast"
 	"github.com/open-policy-agent/opa/bundle"
 	"github.com/open-policy-agent/opa/config"
+	bundleUtils "github.com/open-policy-agent/opa/internal/bundle"
 	cfg "github.com/open-policy-agent/opa/internal/config"
 	initload "github.com/open-policy-agent/opa/internal/runtime/init"
 	"github.com/open-policy-agent/opa/loader"
@@ -308,7 +309,7 @@ func (m *Manager) Init(ctx context.Context) error {
 
 		SetCompilerOnContext(params.Context, result.Compiler)
 
-		resolvers, err := bundle.LoadWasmResolversFromStore(ctx, m.Store, txn, nil)
+		resolvers, err := bundleUtils.LoadWasmResolversFromStore(ctx, m.Store, txn, nil)
 		if err != nil {
 			return err
 		}
@@ -582,7 +583,7 @@ func (m *Manager) onCommit(ctx context.Context, txn storage.Transaction, event s
 
 	} else if event.DataChanged() {
 		if requiresWasmResolverReload(event) {
-			resolvers, err := bundle.LoadWasmResolversFromStore(ctx, m.Store, txn, nil)
+			resolvers, err := bundleUtils.LoadWasmResolversFromStore(ctx, m.Store, txn, nil)
 			if err != nil {
 				panic(err)
 			}

@@ -16,6 +16,7 @@ import (
 
 	"github.com/open-policy-agent/opa/ast"
 	"github.com/open-policy-agent/opa/bundle"
+	bundleUtils "github.com/open-policy-agent/opa/internal/bundle"
 	"github.com/open-policy-agent/opa/internal/compiler/wasm"
 	"github.com/open-policy-agent/opa/internal/ir"
 	"github.com/open-policy-agent/opa/internal/planner"
@@ -1654,7 +1655,7 @@ func (r *Rego) compileModules(ctx context.Context, txn storage.Transaction, m me
 	}
 
 	// Ensure all configured resolvers from the store are loaded
-	resolvers, err := bundle.LoadWasmResolversFromStore(ctx, r.store, txn, r.bundles)
+	resolvers, err := bundleUtils.LoadWasmResolversFromStore(ctx, r.store, txn, r.bundles)
 	if err != nil {
 		return err
 	}

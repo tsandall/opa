@@ -19,12 +19,11 @@ import (
 
 	"github.com/sirupsen/logrus"
 
-	"github.com/open-policy-agent/opa/metrics"
-
 	"github.com/open-policy-agent/opa/ast"
-
 	"github.com/open-policy-agent/opa/bundle"
 	"github.com/open-policy-agent/opa/download"
+	bundleUtils "github.com/open-policy-agent/opa/internal/bundle"
+	"github.com/open-policy-agent/opa/metrics"
 	"github.com/open-policy-agent/opa/plugins"
 	"github.com/open-policy-agent/opa/storage"
 )
@@ -450,7 +449,7 @@ func (p *Plugin) activate(ctx context.Context, name string, b *bundle.Bundle) er
 
 		plugins.SetCompilerOnContext(params.Context, compiler)
 
-		resolvers, err := bundle.LoadWasmResolversFromStore(ctx, p.manager.Store, txn, nil)
+		resolvers, err := bundleUtils.LoadWasmResolversFromStore(ctx, p.manager.Store, txn, nil)
 		if err != nil {
 			return err
 		}
