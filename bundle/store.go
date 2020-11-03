@@ -277,7 +277,7 @@ func LoadWasmResolversFromStore(ctx context.Context, store storage.Store, txn st
 		return nil, err
 	}
 
-	resolversToLoad := map[string][]byte{}
+	var resolversToLoad []*WasmModuleFile
 	for _, bundleName := range bundleNames {
 		var wasmResolverConfigs []WasmResolver
 		rawModules := map[string][]byte{}
@@ -299,8 +299,24 @@ func LoadWasmResolversFromStore(ctx context.Context, store storage.Store, txn st
 			}
 		}
 
-		for _, wrc := range wasmResolverConfigs {
-			resolversToLoad[wrc.Entrypoint] = rawModules[wrc.Module]
+		for path, raw := range rawModules {
+			wmf := &WasmModuleFile{
+				URL:  path,
+				Path: path,
+				Raw:  raw,
+			}
+			for _, resolverConf := range wasmResolverConfigs {
+				if resolverConf.Module == path {
+					ref, err := ast.PtrRef(ast.DefaultRootDocument, resolverConf.Entrypoint)
+					if err != nil {
+						return nil, fmt.Errorf("failed to parse wasm module entrypoint '%s': %s", resolverConf.Entrypoint, err)
+					}
+					wmf.Entrypoints = append(wmf.Entrypoints, ref)
+				}
+			}
+			if len(wmf.Entrypoints) > 0 {
+				resolversToLoad = append(resolversToLoad, wmf)
+			}
 		}
 	}
 
@@ -312,15 +328,10 @@ func LoadWasmResolversFromStore(ctx context.Context, store storage.Store, txn st
 			return nil, fmt.Errorf("failed to initialize wasm runtime: %s", err)
 		}
 
-		for ep, bs := range resolversToLoad {
-			ref, err := ast.PtrRef(ast.DefaultRootDocument, ep)
+		for _, wmf := range resolversToLoad {
+			resolver, err := wasm.New(wmf.Entrypoints, wmf.Raw, data)
 			if err != nil {
-				return nil, fmt.Errorf("failed to parse wasm module entrypoint '%s': %s", ep, err)
-			}
-
-			resolver, err := wasm.New(ref, bs, data)
-			if err != nil {
-				return nil, fmt.Errorf("failed to initialize wasm module for entrypoint '%s': %s", ep, err)
+				return nil, fmt.Errorf("failed to initialize wasm module for entrypoints '%s': %s", wmf.Entrypoints, err)
 			}
 			resolvers = append(resolvers, resolver)
 		}
