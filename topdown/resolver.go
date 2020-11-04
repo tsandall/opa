@@ -37,9 +37,11 @@ func (t *resolverTrie) Resolve(e *eval, ref ast.Ref) (ast.Value, error) {
 	defer e.metrics.Timer(metrics.RegoExternalResolve).Stop()
 
 	in := resolver.Input{
-		Ref:   ref,
-		Input: e.input,
+		Ref:     ref,
+		Input:   e.input,
+		Metrics: e.metrics,
 	}
+
 	node := t
 	for i, t := range ref {
 		child, ok := node.children[t.Value]
@@ -76,7 +78,7 @@ func (t *resolverTrie) mktree(e *eval, in resolver.Input) (ast.Value, error) {
 	}
 	obj := ast.NewObject()
 	for k, child := range t.children {
-		v, err := child.mktree(e, resolver.Input{Ref: append(in.Ref, ast.NewTerm(k)), Input: in.Input})
+		v, err := child.mktree(e, resolver.Input{Ref: append(in.Ref, ast.NewTerm(k)), Input: in.Input, Metrics: in.Metrics})
 		if err != nil {
 			return nil, err
 		}
