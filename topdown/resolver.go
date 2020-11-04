@@ -6,6 +6,7 @@ package topdown
 
 import (
 	"github.com/open-policy-agent/opa/ast"
+	"github.com/open-policy-agent/opa/metrics"
 	"github.com/open-policy-agent/opa/resolver"
 )
 
@@ -32,6 +33,9 @@ func (t *resolverTrie) Put(ref ast.Ref, r resolver.Resolver) {
 }
 
 func (t *resolverTrie) Resolve(e *eval, ref ast.Ref) (ast.Value, error) {
+	e.metrics.Timer(metrics.RegoExternalResolve).Start()
+	defer e.metrics.Timer(metrics.RegoExternalResolve).Stop()
+
 	in := resolver.Input{
 		Ref:   ref,
 		Input: e.input,
