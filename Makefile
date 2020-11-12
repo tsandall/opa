@@ -4,10 +4,16 @@
 
 VERSION := $(shell ./build/get-build-version.sh)
 
-CGO_ENABLED ?= 0
+CGO_ENABLED ?= 1
+WASMER_ENABLED ?= 1
 
 # Force modules on and to use the vendor directory.
 GO := CGO_ENABLED=$(CGO_ENABLED) GO111MODULE=on GOFLAGS=-mod=vendor go
+
+GO_TAGS := -tags=
+ifeq ($(WASMER_ENABLED),1)
+GO_TAGS = -tags=opa_wasmer
+endif
 
 GOVERSION := $(shell cat ./.go-version)
 GOARCH := $(shell go env GOARCH)
@@ -72,35 +78,35 @@ generate: wasm-lib-build
 build: go-build
 
 .PHONY: image
-image: build-linux
+image: build-docker
 	@$(MAKE) image-quick
 
 .PHONY: install
 install: generate
-	$(GO) install -ldflags $(LDFLAGS)
+	$(GO) install $(GO_TAGS) -ldflags $(LDFLAGS)
 
 .PHONY: test
 test: go-test wasm-test
 
 .PHONY: go-build
 go-build: generate
-	$(GO) build -o $(BIN) -ldflags $(LDFLAGS)
+	$(GO) build $(GO_TAGS) -o $(BIN) -ldflags $(LDFLAGS)
 
 .PHONY: go-test
 go-test: generate
-	$(GO) test -tags=slow ./...
+	$(GO) test $(GO_TAGS),slow ./...
 
 .PHONY: race-detector
 race-detector: generate
-	$(GO) test -tags=slow -race -vet=off ./...
+	$(GO) test $(GO_TAGS),slow -race -vet=off ./...
 
 .PHONY: test-coverage
-test-coverage:
-	$(GO) test -tags=slow -coverprofile=coverage.txt -covermode=atomic ./...
+test-coverage: generate
+	$(GO) test $(GO_TAGS),slow -coverprofile=coverage.txt -covermode=atomic ./...
 
 .PHONY: perf
 perf: generate
-	$(GO) test -run=- -bench=. -benchmem ./...
+	$(GO) test $(GO_TAGS) -run=- -bench=. -benchmem ./...
 
 .PHONY: check
 check: check-fmt check-vet check-lint
@@ -210,43 +216,44 @@ CI_GOLANG_DOCKER_MAKE := $(DOCKER) run \
 	-w /src \
 	-e GOCACHE=/src/.go/cache \
 	-e CGO_ENABLED=$(CGO_ENABLED) \
+	-e WASMER_ENABLED=$(WASMER_ENABLED) \
 	-e FUZZ_TIME=$(FUZZ_TIME) \
 	-e TELEMETRY_URL=$(TELEMETRY_URL) \
 	golang:$(GOVERSION) \
 	make
 
 .PHONY: ci-go-%
-ci-go-%:
+ci-go-%: generate
 	$(CI_GOLANG_DOCKER_MAKE) $*
 
 .PHONY: ci-release-test
-ci-release-test:
+ci-release-test: generate
 	$(CI_GOLANG_DOCKER_MAKE) test perf check
 
 .PHONY: ci-check-working-copy
 ci-check-working-copy: generate
 	./build/check-working-copy.sh
 
-# The ci-wasm target exists because we do not want to run the generate
-# target outside of Docker. This step duplicates the the wasm-rego-test target
-# above.
 .PHONY: ci-wasm
-ci-wasm: wasm-lib-test
-	GOVERSION=$(GOVERSION) ./build/run-wasm-rego-tests.sh
+ci-wasm: wasm-test
+
+.PHONY: build-docker
+build-docker: ensure-release-dir
+	CGO_LDFLAGS="-Wl,-rpath -Wl,./$$ORIGIN" $(GO) build $(GO_TAGS) -o $(RELEASE_DIR)/opa_docker_$(GOARCH) -ldflags $(LDFLAGS)
 
 .PHONY: build-linux
 build-linux: ensure-release-dir
-	@$(MAKE) build GOOS=linux
+	@$(MAKE) build GOOS=linux CGO_ENABLED=0 WASMER_ENABLED=0
 	mv opa_linux_$(GOARCH) $(RELEASE_DIR)/
 
 .PHONY: build-darwin
 build-darwin: ensure-release-dir
-	@$(MAKE) build GOOS=darwin
+	@$(MAKE) build GOOS=darwin CGO_ENABLED=0 WASMER_ENABLED=0
 	mv opa_darwin_$(GOARCH) $(RELEASE_DIR)/
 
 .PHONY: build-windows
 build-windows: ensure-release-dir
-	@$(MAKE) build GOOS=windows
+	@$(MAKE) build GOOS=windows CGO_ENABLED=0 WASMER_ENABLED=0
 	mv opa_windows_$(GOARCH) $(RELEASE_DIR)/opa_windows_$(GOARCH).exe
 
 .PHONY: ensure-release-dir
@@ -254,24 +261,24 @@ ensure-release-dir:
 	mkdir -p $(RELEASE_DIR)
 
 .PHONY: build-all-platforms
-build-all-platforms: build-linux build-darwin build-windows
+build-all-platforms: build-docker build-linux build-darwin build-windows
 
 .PHONY: image-quick
 image-quick:
 	$(DOCKER) build \
 		-t $(DOCKER_IMAGE):$(VERSION) \
-		--build-arg BASE=scratch \
+		--build-arg BASE=gcr.io/distroless/cc \
 		--build-arg BIN_DIR=$(RELEASE_DIR) \
 		.
 	$(DOCKER) build \
 		-t $(DOCKER_IMAGE):$(VERSION)-debug \
-		--build-arg BASE=gcr.io/distroless/base:debug \
+		--build-arg BASE=gcr.io/distroless/cc:debug \
 		--build-arg BIN_DIR=$(RELEASE_DIR) \
 		.
 	$(DOCKER) build \
 		-t $(DOCKER_IMAGE):$(VERSION)-rootless \
 		--build-arg USER=1000 \
-		--build-arg BASE=scratch \
+		--build-arg BASE=gcr.io/distroless/cc \
 		--build-arg BIN_DIR=$(RELEASE_DIR) \
 		.
 
