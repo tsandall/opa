@@ -26,6 +26,7 @@ import (
 
 	"github.com/gorilla/mux"
 	"github.com/pkg/errors"
+
 	"golang.org/x/net/http2"
 	"golang.org/x/net/http2/h2c"
 
@@ -685,12 +686,10 @@ func (s *Server) execQuery(ctx context.Context, r *http.Request, txn storage.Tra
 		rawSchema = &x
 	}
 
-	compiler := s.getCompiler()
-
-	rego := rego.New(
+	opts := []func(*rego.Rego){
 		rego.Store(s.store),
 		rego.Transaction(txn),
-		rego.Compiler(compiler),
+		rego.Compiler(s.getCompiler()),
 		rego.ParsedQuery(parsedQuery),
 		rego.ParsedInput(input),
 		rego.Metrics(m),
@@ -699,8 +698,15 @@ func (s *Server) execQuery(ctx context.Context, r *http.Request, txn storage.Tra
 		rego.Runtime(s.runtime),
 		rego.UnsafeBuiltins(unsafeBuiltinsMap),
 		rego.InterQueryBuiltinCache(s.interQueryBuiltinCache),
-		rego.ParsedSchema(schema),
-	)
+	}
+
+	for _, r := range s.manager.GetWasmResolvers() {
+		for _, entrypoint := range r.Entrypoints() {
+			opts = append(opts, rego.Resolver(entrypoint, r))
+		}
+	}
+
+	rego := rego.New(opts...)
 
 	output, err := rego.Eval(ctx)
 	if err != nil {
@@ -898,7 +904,7 @@ func (s *Server) v0QueryPath(w http.ResponseWriter, r *http.Request, urlPath str
 	if !ok {
 		path := stringPathToDataRef(urlPath)
 
-		rego := rego.New(
+		opts := []func(*rego.Rego){
 			rego.Compiler(s.getCompiler()),
 			rego.Store(s.store),
 			rego.Transaction(txn),
@@ -906,8 +912,17 @@ func (s *Server) v0QueryPath(w http.ResponseWriter, r *http.Request, urlPath str
 			rego.Metrics(m),
 			rego.Runtime(s.runtime),
 			rego.UnsafeBuiltins(unsafeBuiltinsMap),
-		)
-		pq, err := rego.PrepareForEval(ctx)
+		}
+
+		// Set resolvers on the base Rego object to avoid having them get
+		// re-initialized, and to propagate them to the prepared query.
+		for _, r := range s.manager.GetWasmResolvers() {
+			for _, entrypoint := range r.Entrypoints() {
+				opts = append(opts, rego.Resolver(entrypoint, r))
+			}
+		}
+
+		pq, err := rego.New(opts...).PrepareForEval(ctx)
 		if err != nil {
 			_ = logger.Log(ctx, txn, decisionID, r.RemoteAddr, urlPath, "", goInput, input, nil, err, m, goSchema, schema)
 			writer.ErrorAuto(w, err)
@@ -917,11 +932,16 @@ func (s *Server) v0QueryPath(w http.ResponseWriter, r *http.Request, urlPath str
 		s.preparedEvalQueries.Insert(pqID, preparedQuery)
 	}
 
-	rs, err := preparedQuery.Eval(
-		ctx,
+	evalOpts := []rego.EvalOption{
 		rego.EvalTransaction(txn),
 		rego.EvalParsedInput(input),
 		rego.EvalMetrics(m),
+		rego.EvalInterQueryBuiltinCache(s.interQueryBuiltinCache),
+	}
+
+	rs, err := preparedQuery.Eval(
+		ctx,
+		evalOpts...,
 	)
 
 	m.Timer(metrics.ServerHandler).Stop()
@@ -964,8 +984,19 @@ func (s *Server) getCachedPreparedEvalQuery(key string, m metrics.Metrics) (*reg
 
 func (s *Server) canEval(ctx context.Context) bool {
 	// Create very simple query that binds a single variable.
-	eval := rego.New(rego.Compiler(s.getCompiler()),
-		rego.Store(s.store), rego.Query("x = 1"))
+	opts := []func(*rego.Rego){
+		rego.Compiler(s.getCompiler()),
+		rego.Store(s.store),
+		rego.Query("x = 1"),
+	}
+
+	for _, r := range s.manager.GetWasmResolvers() {
+		for _, ep := range r.Entrypoints() {
+			opts = append(opts, rego.Resolver(ep, r))
+		}
+	}
+
+	eval := rego.New(opts...)
 	// Run evaluation.
 	rs, err := eval.Eval(ctx)
 	if err != nil {
@@ -1220,7 +1251,7 @@ func (s *Server) v1DataGet(w http.ResponseWriter, r *http.Request) {
 	pqID += urlPath
 	preparedQuery, ok := s.getCachedPreparedEvalQuery(pqID, m)
 	if !ok {
-		rego := rego.New(
+		opts := []func(*rego.Rego){
 			rego.Compiler(s.getCompiler()),
 			rego.Store(s.store),
 			rego.Transaction(txn),
@@ -1232,9 +1263,15 @@ func (s *Server) v1DataGet(w http.ResponseWriter, r *http.Request) {
 			rego.Runtime(s.runtime),
 			rego.UnsafeBuiltins(unsafeBuiltinsMap),
 			rego.StrictBuiltinErrors(strictBuiltinErrors),
-		)
+		}
 
-		pq, err := rego.PrepareForEval(ctx)
+		for _, r := range s.manager.GetWasmResolvers() {
+			for _, entrypoint := range r.Entrypoints() {
+				opts = append(opts, rego.Resolver(entrypoint, r))
+			}
+		}
+
+		pq, err := rego.New(opts...).PrepareForEval(ctx)
 		if err != nil {
 			_ = logger.Log(ctx, txn, decisionID, r.RemoteAddr, urlPath, "", goInput, input, nil, err, m, goSchema, schema)
 			writer.ErrorAuto(w, err)
@@ -1244,13 +1281,17 @@ func (s *Server) v1DataGet(w http.ResponseWriter, r *http.Request) {
 		s.preparedEvalQueries.Insert(pqID, preparedQuery)
 	}
 
-	rs, err := preparedQuery.Eval(
-		ctx,
+	evalOpts := []rego.EvalOption{
 		rego.EvalTransaction(txn),
 		rego.EvalParsedInput(input),
 		rego.EvalMetrics(m),
 		rego.EvalQueryTracer(buf),
 		rego.EvalInterQueryBuiltinCache(s.interQueryBuiltinCache),
+	}
+
+	rs, err := preparedQuery.Eval(
+		ctx,
+		evalOpts...,
 	)
 
 	m.Timer(metrics.ServerHandler).Stop()
@@ -1414,12 +1455,6 @@ func (s *Server) v1DataPost(w http.ResponseWriter, r *http.Request) {
 
 	logger := s.getDecisionLogger()
 
-	opts := []func(*rego.Rego){
-		rego.Compiler(s.getCompiler()),
-		rego.Store(s.store),
-		rego.StrictBuiltinErrors(strictBuiltinErrors),
-	}
-
 	var buf *topdown.BufferTracer
 
 	if explainMode != types.ExplainOffV1 {
@@ -1436,6 +1471,20 @@ func (s *Server) v1DataPost(w http.ResponseWriter, r *http.Request) {
 	pqID += urlPath
 	preparedQuery, ok := s.getCachedPreparedEvalQuery(pqID, m)
 	if !ok {
+		opts := []func(*rego.Rego){
+			rego.Compiler(s.getCompiler()),
+			rego.Store(s.store),
+			rego.StrictBuiltinErrors(strictBuiltinErrors),
+		}
+
+		// Set resolvers on the base Rego object to avoid having them get
+		// re-initialized, and to propagate them to the prepared query.
+		for _, r := range s.manager.GetWasmResolvers() {
+			for _, entrypoint := range r.Entrypoints() {
+				opts = append(opts, rego.Resolver(entrypoint, r))
+			}
+		}
+
 		rego, err := s.makeRego(ctx, partial, txn, input, urlPath, m, includeInstrumentation, buf, opts, schema)
 
 		if err != nil {
@@ -1454,13 +1503,17 @@ func (s *Server) v1DataPost(w http.ResponseWriter, r *http.Request) {
 		s.preparedEvalQueries.Insert(pqID, preparedQuery)
 	}
 
-	rs, err := preparedQuery.Eval(
-		ctx,
+	evalOpts := []rego.EvalOption{
 		rego.EvalTransaction(txn),
 		rego.EvalParsedInput(input),
 		rego.EvalMetrics(m),
 		rego.EvalQueryTracer(buf),
 		rego.EvalInterQueryBuiltinCache(s.interQueryBuiltinCache),
+	}
+
+	rs, err := preparedQuery.Eval(
+		ctx,
+		evalOpts...,
 	)
 
 	m.Timer(metrics.ServerHandler).Stop()
@@ -1896,7 +1949,7 @@ func (s *Server) v1QueryGet(w http.ResponseWriter, r *http.Request) {
 
 	defer s.store.Abort(ctx, txn)
 
-	results, err := s.execQuery(ctx, r, txn, decisionID, parsedQuery, nil, m, explainMode, includeMetrics, includeInstrumentation, pretty, nil) //AAV ?
+	results, err := s.execQuery(ctx, r, txn, decisionID, parsedQuery, nil, m, explainMode, includeMetrics, includeInstrumentation, pretty, nil)
 	if err != nil {
 		switch err := err.(type) {
 		case ast.Errors:
@@ -1949,7 +2002,7 @@ func (s *Server) v1QueryPost(w http.ResponseWriter, r *http.Request) {
 
 	defer s.store.Abort(ctx, txn)
 
-	results, err := s.execQuery(ctx, r, txn, decisionID, parsedQuery, nil, m, explainMode, includeMetrics, includeInstrumentation, pretty, nil) //AAV ?
+	results, err := s.execQuery(ctx, r, txn, decisionID, parsedQuery, nil, m, explainMode, includeMetrics, includeInstrumentation, pretty, nil)
 	if err != nil {
 		switch err := err.(type) {
 		case ast.Errors:
