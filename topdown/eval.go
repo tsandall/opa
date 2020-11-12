@@ -56,7 +56,6 @@ type eval struct {
 	compiler               *ast.Compiler
 	input                  *ast.Term
 	data                   *ast.Term
-	external               *resolverTrie
 	targetStack            *refStack
 	tracers                []QueryTracer
 	traceEnabled           bool
@@ -77,6 +76,7 @@ type eval struct {
 	genvarid               int
 	runtime                *ast.Term
 	builtinErrors          *builtinErrors
+	schema                 interface{}
 }
 
 func (e *eval) Run(iter evalIterator) error {
@@ -151,38 +151,34 @@ func (e *eval) unknown(x interface{}, b *bindings) bool {
 }
 
 func (e *eval) traceEnter(x ast.Node) {
-	e.traceEvent(EnterOp, x, "", nil)
+	e.traceEvent(EnterOp, x, "")
 }
 
 func (e *eval) traceExit(x ast.Node) {
-	e.traceEvent(ExitOp, x, "", nil)
+	e.traceEvent(ExitOp, x, "")
 }
 
 func (e *eval) traceEval(x ast.Node) {
-	e.traceEvent(EvalOp, x, "", nil)
+	e.traceEvent(EvalOp, x, "")
 }
 
 func (e *eval) traceFail(x ast.Node) {
-	e.traceEvent(FailOp, x, "", nil)
+	e.traceEvent(FailOp, x, "")
 }
 
 func (e *eval) traceRedo(x ast.Node) {
-	e.traceEvent(RedoOp, x, "", nil)
+	e.traceEvent(RedoOp, x, "")
 }
 
 func (e *eval) traceSave(x ast.Node) {
-	e.traceEvent(SaveOp, x, "", nil)
+	e.traceEvent(SaveOp, x, "")
 }
 
-func (e *eval) traceIndex(x ast.Node, msg string, target *ast.Ref) {
-	e.traceEvent(IndexOp, x, msg, target)
+func (e *eval) traceIndex(x ast.Node, msg string) {
+	e.traceEvent(IndexOp, x, msg)
 }
 
-func (e *eval) traceWasm(x ast.Node, target *ast.Ref) {
-	e.traceEvent(WasmOp, x, "", target)
-}
-
-func (e *eval) traceEvent(op Op, x ast.Node, msg string, target *ast.Ref) {
+func (e *eval) traceEvent(op Op, x ast.Node, msg string) {
 
 	if !e.traceEnabled {
 		return
@@ -200,7 +196,6 @@ func (e *eval) traceEvent(op Op, x ast.Node, msg string, target *ast.Ref) {
 		Node:     x,
 		Location: x.Loc(),
 		Message:  msg,
-		Ref:      target,
 	}
 
 	// Skip plugging the local variables, unless any of the tracers
@@ -1254,7 +1249,7 @@ func (e *eval) getRules(ref ast.Ref) (*ast.IndexResult, error) {
 		b.WriteString(" rules)")
 		msg = b.String()
 	}
-	e.traceIndex(e.query[e.index], msg, &ref)
+	e.traceIndex(e.query[e.index], msg)
 	return result, err
 }
 
@@ -1331,49 +1326,43 @@ func (e *eval) resolveReadFromStorage(ref ast.Ref, a ast.Value) (ast.Value, erro
 		return a, nil
 	}
 
-	v, err := e.external.Resolve(e, ref)
-
+	path, err := storage.NewPathForRef(ref)
 	if err != nil {
-		return nil, err
-	} else if v == nil {
-
-		path, err := storage.NewPathForRef(ref)
-		if err != nil {
-			if !storage.IsNotFound(err) {
-				return nil, err
-			}
-			return a, nil
-		}
-
-		blob, err := e.store.Read(e.ctx, e.txn, path)
-		if err != nil {
-			if !storage.IsNotFound(err) {
-				return nil, err
-			}
-			return a, nil
-		}
-
-		if len(path) == 0 {
-			obj := blob.(map[string]interface{})
-			if len(obj) > 0 {
-				cpy := make(map[string]interface{}, len(obj)-1)
-				for k, v := range obj {
-					if string(ast.SystemDocumentKey) == k {
-						continue
-					}
-					cpy[k] = v
-				}
-				blob = cpy
-			}
-		}
-
-		v, err = ast.InterfaceToValue(blob)
-		if err != nil {
+		if !storage.IsNotFound(err) {
 			return nil, err
+		}
+		return a, nil
+	}
+
+	blob, err := e.store.Read(e.ctx, e.txn, path)
+	if err != nil {
+		if !storage.IsNotFound(err) {
+			return nil, err
+		}
+		return a, nil
+	}
+
+	if len(path) == 0 {
+		obj := blob.(map[string]interface{})
+		if len(obj) > 0 {
+			cpy := make(map[string]interface{}, len(obj)-1)
+			for k, v := range obj {
+				if string(ast.SystemDocumentKey) == k {
+					continue
+				}
+				cpy[k] = v
+			}
+			blob = cpy
 		}
 	}
 
+	v, err := ast.InterfaceToValue(blob)
+	if err != nil {
+		return nil, err
+	}
+
 	e.baseCache.Put(ref, v)
+
 	if a == nil {
 		return v, nil
 	}
@@ -1382,7 +1371,6 @@ func (e *eval) resolveReadFromStorage(ref ast.Ref, a ast.Value) (ast.Value, erro
 	if !ok {
 		return nil, mergeConflictErr(ref[0].Location)
 	}
-
 	return merged, nil
 }
 
@@ -2766,6 +2754,15 @@ func isInputRef(term *ast.Term) bool {
 func isDataRef(term *ast.Term) bool {
 	if ref, ok := term.Value.(ast.Ref); ok {
 		if ref.HasPrefix(ast.DefaultRootRef) {
+			return true
+		}
+	}
+	return false
+}
+
+func isSchemaRef(term *ast.Term) bool {
+	if ref, ok := term.Value.(ast.Ref); ok {
+		if ref.HasPrefix(ast.SchemaRootRef) {
 			return true
 		}
 	}

@@ -31,11 +31,15 @@ var DefaultRootDocument = VarTerm("data")
 // InputRootDocument names the document containing query arguments.
 var InputRootDocument = VarTerm("input")
 
+// SchemaRootDocument names the document containing query arguments.
+var SchemaRootDocument = VarTerm("schema")
+
 // RootDocumentNames contains the names of top-level documents that can be
 // referred to in modules and queries.
 var RootDocumentNames = NewSet(
 	DefaultRootDocument,
 	InputRootDocument,
+	SchemaRootDocument,
 )
 
 // DefaultRootRef is a reference to the root of the default document.
@@ -48,11 +52,17 @@ var DefaultRootRef = Ref{DefaultRootDocument}
 // All refs to query arguments are prefixed with this ref.
 var InputRootRef = Ref{InputRootDocument}
 
+// SchemaRootRef is a reference to the root of the schema document.
+//
+// All refs to query arguments are prefixed with this ref.
+var SchemaRootRef = Ref{SchemaRootDocument}
+
 // RootDocumentRefs contains the prefixes of top-level documents that all
 // non-local references start with.
 var RootDocumentRefs = NewSet(
 	NewTerm(DefaultRootRef),
 	NewTerm(InputRootRef),
+	NewTerm(SchemaRootRef),
 )
 
 // SystemDocumentKey is the name of the top-level key that identifies the system
@@ -63,6 +73,7 @@ var SystemDocumentKey = String("system")
 var ReservedVars = NewVarSet(
 	DefaultRootDocument.Value.(Var),
 	InputRootDocument.Value.(Var),
+	SchemaRootDocument.Value.(Var),
 )
 
 // Wildcard represents the wildcard variable as defined in the language.
@@ -379,12 +390,12 @@ func (pkg *Package) String() string {
 func IsValidImportPath(v Value) (err error) {
 	switch v := v.(type) {
 	case Var:
-		if !v.Equal(DefaultRootDocument.Value) && !v.Equal(InputRootDocument.Value) {
-			return fmt.Errorf("invalid path %v: path must begin with input or data", v)
+		if !v.Equal(DefaultRootDocument.Value) && !v.Equal(InputRootDocument.Value) && !v.Equal(SchemaRootDocument.Value) {
+			return fmt.Errorf("invalid path %v: path must begin with input or data or schema", v)
 		}
 	case Ref:
 		if err := IsValidImportPath(v[0].Value); err != nil {
-			return fmt.Errorf("invalid path %v: path must begin with input or data", v)
+			return fmt.Errorf("invalid path %v: path must begin with input or data or schema", v)
 		}
 		for _, e := range v[1:] {
 			if _, ok := e.Value.(String); !ok {

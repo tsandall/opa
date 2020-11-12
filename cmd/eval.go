@@ -56,6 +56,7 @@ type evalCommandParams struct {
 	fail                bool
 	failDefined         bool
 	bundlePaths         repeatedStringFlag
+	schemaPath          string
 }
 
 func newEvalCommandParams() evalCommandParams {
@@ -244,6 +245,7 @@ Set the output format with the --format flag.
 	addOutputFormat(evalCommand.Flags(), params.outputFormat)
 	addIgnoreFlag(evalCommand.Flags(), &params.ignore)
 	setExplainFlag(evalCommand.Flags(), params.explain)
+	addSchemaFlag(evalCommand.Flags(), &params.schemaPath)
 
 	RootCommand.AddCommand(evalCommand)
 }
@@ -308,6 +310,10 @@ func eval(args []string, params evalCommandParams, w io.Writer) (bool, error) {
 	if ectx.params.coverage {
 		report := ectx.cover.Report(parsedModules)
 		result.Coverage = &report
+	}
+
+	if ectx.r != nil { //AAV Todo
+
 	}
 
 	switch params.outputFormat.String() {
@@ -408,6 +414,22 @@ func setupEval(args []string, params evalCommandParams) (*evalContext, error) {
 		regoArgs = append(regoArgs, rego.ParsedInput(inputValue))
 	}
 
+	schemaBytes, err := readSchemaBytes(params) //AAV
+	if err != nil {
+		return nil, err
+	} else if schemaBytes != nil {
+		var schema interface{}
+		err := util.Unmarshal(schemaBytes, &schema)
+		if err != nil {
+			return nil, fmt.Errorf("unable to parse schema: %s", err.Error())
+		}
+		/* 		schemaValue, err := ast.InterfaceToValue(schema)
+		   		if err != nil {
+		   			return nil, fmt.Errorf("unable to process schema: %s", err.Error())
+		   		} */
+		regoArgs = append(regoArgs, rego.ParsedSchema(schema))
+	}
+
 	var tracer *topdown.BufferTracer
 
 	if params.explain != nil && params.explain.String() != explainModeOff {
@@ -493,6 +515,17 @@ func readInputBytes(params evalCommandParams) ([]byte, error) {
 		return ioutil.ReadAll(os.Stdin)
 	} else if params.inputPath != "" {
 		path, err := fileurl.Clean(params.inputPath)
+		if err != nil {
+			return nil, err
+		}
+		return ioutil.ReadFile(path)
+	}
+	return nil, nil
+}
+
+func readSchemaBytes(params evalCommandParams) ([]byte, error) {
+	if params.schemaPath != "" {
+		path, err := fileurl.Clean(params.schemaPath)
 		if err != nil {
 			return nil, err
 		}

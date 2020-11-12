@@ -16,14 +16,12 @@ import (
 
 	"github.com/open-policy-agent/opa/ast"
 	"github.com/open-policy-agent/opa/bundle"
-	bundleUtils "github.com/open-policy-agent/opa/internal/bundle"
 	"github.com/open-policy-agent/opa/internal/compiler/wasm"
 	"github.com/open-policy-agent/opa/internal/ir"
 	"github.com/open-policy-agent/opa/internal/planner"
 	"github.com/open-policy-agent/opa/internal/wasm/encoding"
 	"github.com/open-policy-agent/opa/loader"
 	"github.com/open-policy-agent/opa/metrics"
-	"github.com/open-policy-agent/opa/resolver"
 	"github.com/open-policy-agent/opa/storage"
 	"github.com/open-policy-agent/opa/storage/inmem"
 	"github.com/open-policy-agent/opa/topdown"
@@ -100,7 +98,9 @@ type EvalContext struct {
 	parsedUnknowns         []*ast.Term
 	indexing               bool
 	interQueryBuiltinCache cache.InterQueryCache
-	resolvers              []refResolver
+	hasSchema              bool
+	rawSchema              *interface{}
+	//parsedSchema           interface{}
 }
 
 // EvalOption defines a function to set an option on an EvalConfig
@@ -121,6 +121,23 @@ func EvalParsedInput(input ast.Value) EvalOption {
 		e.hasInput = true
 	}
 }
+
+// EvalSchema configures the schema for a Prepared Query's evaluation
+func EvalSchema(schema interface{}) EvalOption {
+	return func(e *EvalContext) {
+		e.rawSchema = &schema
+		e.hasSchema = true
+	}
+}
+
+/*
+// EvalParsedSchema configures the schema for a Prepared Query's evaluation
+func EvalParsedSchema(schema ast.Value) EvalOption {
+	return func(e *EvalContext) {
+		e.parsedSchema = schema
+		e.hasSchema = true
+	}
+} */
 
 // EvalMetrics configures the metrics for a Prepared Query's evaluation
 func EvalMetrics(metric metrics.Metrics) EvalOption {
@@ -219,13 +236,6 @@ func EvalInterQueryBuiltinCache(c cache.InterQueryCache) EvalOption {
 	}
 }
 
-// EvalResolver sets a Resolver for a specified ref path for this evaluation.
-func EvalResolver(ref ast.Ref, r resolver.Resolver) EvalOption {
-	return func(e *EvalContext) {
-		e.resolvers = append(e.resolvers, refResolver{ref, r})
-	}
-}
-
 func (pq preparedQuery) Modules() map[string]*ast.Module {
 	mods := make(map[string]*ast.Module)
 
@@ -261,7 +271,6 @@ func (pq preparedQuery) newEvalContext(ctx context.Context, options []EvalOption
 		parsedUnknowns:   pq.r.parsedUnknowns,
 		compiledQuery:    compiledQuery{},
 		indexing:         true,
-		resolvers:        pq.r.resolvers,
 	}
 
 	for _, o := range options {
@@ -314,6 +323,24 @@ func (pq preparedQuery) newEvalContext(ctx context.Context, options []EvalOption
 		}
 	}
 
+	// If we didn't get an schema specified in the Eval options
+	// then fall back to the Rego object's input fields.
+	if !ectx.hasSchema {
+		ectx.rawSchema = pq.r.rawSchema
+		//ectx.parsedSchema = pq.r.parsedSchema
+	}
+
+	/* 	if ectx.parsedSchema == nil {
+		if ectx.rawSchema == nil {
+			// Fall back to the original Rego objects input if none was specified
+			// Note that it could still be nil
+			ectx.rawSchema = pq.r.rawSchema
+		}
+		ectx.parsedSchema, err = pq.r.parseRawInput(ectx.rawSchema, ectx.metrics)
+		if err != nil {
+			return nil, finishFunc, err
+		}
+	} */
 	return ectx, finishFunc, nil
 }
 
@@ -517,7 +544,8 @@ type Rego struct {
 	skipBundleVerification bool
 	interQueryBuiltinCache cache.InterQueryCache
 	strictBuiltinErrors    bool
-	resolvers              []refResolver
+	rawSchema              *interface{}
+	parsedSchema           interface{}
 }
 
 // Function represents a built-in function that is callable in Rego.
@@ -1015,10 +1043,10 @@ func StrictBuiltinErrors(yes bool) func(r *Rego) {
 	}
 }
 
-// Resolver sets a Resolver for a specified ref path.
-func Resolver(ref ast.Ref, r resolver.Resolver) func(r *Rego) {
-	return func(rego *Rego) {
-		rego.resolvers = append(rego.resolvers, refResolver{ref, r})
+// ParsedSchema returns an argument that sets the Rego schema document. AAV
+func ParsedSchema(x interface{}) func(r *Rego) {
+	return func(r *Rego) {
+		r.parsedSchema = x
 	}
 }
 
@@ -1099,10 +1127,6 @@ func (r *Rego) Eval(ctx context.Context) (ResultSet, error) {
 		evalArgs = append(evalArgs, EvalQueryTracer(qt))
 	}
 
-	for i := range r.resolvers {
-		evalArgs = append(evalArgs, EvalResolver(r.resolvers[i].ref, r.resolvers[i].r))
-	}
-
 	rs, err := pq.Eval(ctx, evalArgs...)
 	txnErr := txnClose(ctx, err) // Always call closer
 	if err == nil {
@@ -1169,10 +1193,6 @@ func (r *Rego) Partial(ctx context.Context) (*PartialQueries, error) {
 
 	for _, t := range r.queryTracers {
 		evalArgs = append(evalArgs, EvalQueryTracer(t))
-	}
-
-	for i := range r.resolvers {
-		evalArgs = append(evalArgs, EvalResolver(r.resolvers[i].ref, r.resolvers[i].r))
 	}
 
 	pqs, err := pq.Partial(ctx, evalArgs...)
@@ -1283,17 +1303,10 @@ func (r *Rego) Compile(ctx context.Context, opts ...CompileOption) (*CompileResu
 		decls[k] = v
 	}
 
-	const queryName = "eval" // NOTE(tsandall): the query name is arbitrary
-
 	policy, err := planner.New().
-		WithQueries([]planner.QuerySet{
-			{
-				Name:          queryName,
-				Queries:       queries,
-				RewrittenVars: r.compiledQueries[compileQueryType].compiler.RewrittenVars(),
-			},
-		}).
+		WithQueries(queries).
 		WithModules(modules).
+		WithRewrittenVars(r.compiledQueries[compileQueryType].compiler.RewrittenVars()).
 		WithBuiltinDecls(decls).
 		Plan()
 	if err != nil {
@@ -1458,6 +1471,11 @@ func (r *Rego) prepare(ctx context.Context, qType queryType, extras []extraStage
 		return err
 	}
 
+	r.parsedSchema, err = r.parseSchema()
+	if err != nil {
+		return err
+	}
+
 	err = r.loadFiles(ctx, r.txn, r.metrics)
 	if err != nil {
 		return err
@@ -1596,7 +1614,14 @@ func (r *Rego) parseInput() (ast.Value, error) {
 	return r.parseRawInput(r.rawInput, r.metrics)
 }
 
-func (r *Rego) parseRawInput(rawInput *interface{}, m metrics.Metrics) (ast.Value, error) {
+func (r *Rego) parseSchema() (interface{}, error) {
+	if r.parsedSchema != nil {
+		return r.parsedSchema, nil
+	}
+	return nil, nil
+}
+
+func (r *Rego) parseRawInput(rawInput *interface{}, m metrics.Metrics) (ast.Value, error) { //AAV ?
 	var input ast.Value
 
 	if rawInput == nil {
@@ -1647,23 +1672,11 @@ func (r *Rego) compileModules(ctx context.Context, txn storage.Transaction, m me
 			Metrics:      m,
 			Bundles:      r.bundles,
 			ExtraModules: r.parsedModules,
+			Schema:       r.parsedSchema,
 		}
 		err := bundle.Activate(opts)
 		if err != nil {
 			return err
-		}
-	}
-
-	// Ensure all configured resolvers from the store are loaded. Skip if any were explicitly provided.
-	if len(r.resolvers) == 0 {
-		resolvers, err := bundleUtils.LoadWasmResolversFromStore(ctx, r.store, txn, r.bundles)
-		if err != nil {
-			return err
-		}
-		for _, rslvr := range resolvers {
-			for _, ep := range rslvr.Entrypoints() {
-				r.resolvers = append(r.resolvers, refResolver{ep, rslvr})
-			}
 		}
 	}
 	return nil
@@ -1763,8 +1776,8 @@ func (r *Rego) eval(ctx context.Context, ectx *EvalContext) (ResultSet, error) {
 		q = q.WithInput(ast.NewTerm(ectx.parsedInput))
 	}
 
-	for i := range ectx.resolvers {
-		q = q.WithResolver(ectx.resolvers[i].ref, ectx.resolvers[i].r)
+	if ectx.rawSchema != nil {
+		q = q.WithSchema(ectx.rawSchema)
 	}
 
 	// Cancel query if context is cancelled or deadline is reached.
@@ -1847,7 +1860,7 @@ func (r *Rego) partialResult(ctx context.Context, pCfg *PrepareConfig) (PartialR
 		compiledQuery:    r.compiledQueries[partialResultQueryType],
 		instrumentation:  r.instrumentation,
 		indexing:         true,
-		resolvers:        r.resolvers,
+		rawSchema:        &r.parsedSchema,
 	}
 
 	disableInlining := r.disableInlining
@@ -1894,7 +1907,7 @@ func (r *Rego) partialResult(ctx context.Context, pCfg *PrepareConfig) (PartialR
 	}
 
 	r.metrics.Timer(metrics.RegoModuleCompile).Start()
-	r.compilerForTxn(ctx, r.store, r.txn).Compile(r.compiler.Modules)
+	r.compilerForTxn(ctx, r.store, r.txn).Compile(r.compiler.Modules) //AAV TODO
 	r.metrics.Timer(metrics.RegoModuleCompile).Stop()
 
 	if r.compiler.Failed() {
@@ -1962,8 +1975,8 @@ func (r *Rego) partial(ctx context.Context, ectx *EvalContext) (*PartialQueries,
 		q = q.WithInput(ast.NewTerm(ectx.parsedInput))
 	}
 
-	for i := range ectx.resolvers {
-		q = q.WithResolver(ectx.resolvers[i].ref, ectx.resolvers[i].r)
+	if ectx.rawSchema != nil {
+		q = q.WithSchema(ectx.rawSchema)
 	}
 
 	// Cancel query if context is cancelled or deadline is reached.
@@ -2182,11 +2195,6 @@ func (m rawModule) Parse() (*ast.Module, error) {
 type extraStage struct {
 	after string
 	stage ast.QueryCompilerStageDefinition
-}
-
-type refResolver struct {
-	ref ast.Ref
-	r   resolver.Resolver
 }
 
 func iteration(x interface{}) bool {

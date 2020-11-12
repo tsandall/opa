@@ -151,6 +151,16 @@ type DataResponseV1 struct {
 	Result      *interface{}  `json:"result,omitempty"`
 }
 
+// SchemaRequestV1 models the request message for Schema API POST operations.
+type SchemaRequestV1 struct {
+	Schema *interface{} `json:"schema"`
+}
+
+// SchemaResponseV1 models the response message for Schema API read operations.
+type SchemaResponseV1 struct {
+	Result *interface{} `json:"result,omitempty"`
+}
+
 // MetricsV1 models a collection of performance metrics.
 type MetricsV1 map[string]interface{}
 
@@ -352,6 +362,7 @@ type CompileRequestV1 struct {
 	Input    *interface{} `json:"input"`
 	Query    string       `json:"query"`
 	Unknowns *[]string    `json:"unknowns"`
+	Schema   *interface{} `json:"schema"`
 }
 
 // CompileResponseV1 models the response message for Compile API operations.
@@ -428,6 +439,10 @@ const (
 	// ParamStrictBuiltinErrors names the HTTP URL parameter that indicates the client
 	// wants built-in function errors to be treated as fatal.
 	ParamStrictBuiltinErrors = "strict-builtin-errors"
+
+	// ParamSchemaV1 defines the name of the HTTP URL parameter that specifies
+	// values for the "schema" document.
+	ParamSchemaV1 = "schema"
 )
 
 // BadRequestErr represents an error condition raised if the caller passes

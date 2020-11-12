@@ -11,6 +11,7 @@ import (
 	"strings"
 
 	"github.com/open-policy-agent/opa/metrics"
+	"github.com/open-policy-agent/opa/types"
 	"github.com/open-policy-agent/opa/util"
 )
 
@@ -101,6 +102,7 @@ type Compiler struct {
 	unsafeBuiltinsMap    map[string]struct{}           // user-supplied set of unsafe built-ins functions to block (deprecated: use capabilities)
 	comprehensionIndices map[*Term]*ComprehensionIndex // comprehension key index
 	initialized          bool                          // indicates if init() has been called
+	schema               interface{}
 }
 
 // CompilerStage defines the interface for stages in the compiler.
@@ -349,6 +351,12 @@ func (c *Compiler) Compile(modules map[string]*Module) {
 	sort.Strings(c.sorted)
 
 	c.compile()
+}
+
+// CompileWithSchema runs the compilation process on the input modules.
+func (c *Compiler) CompileWithSchema(modules map[string]*Module, schema interface{}) {
+	c.schema = schema
+	c.Compile(modules)
 }
 
 // Failed returns true if a compilation error has been encountered.
@@ -836,17 +844,89 @@ func (c *Compiler) checkSafetyRuleHeads() {
 	}
 }
 
+func (c *Compiler) parseSchemaInterface(properties map[string]interface{}) []*types.StaticProperty { //NEW TYPE CHECKING FUNCTION
+	//Traverse through c.schema and put appropriate types in TypeEnv
+
+	staticProps := make([]*types.StaticProperty, 0, len(properties))
+	for k, v := range properties {
+		valueMap := v.(map[string]interface{})
+		var value types.Type
+		if valueMap["type"].(string) == "array" {
+			var typeAdd types.Type
+			items := valueMap["items"].(map[string]interface{})
+			if items["type"].(string) == "object" {
+				typeAdd = types.NewObject(c.parseSchemaInterface(items["properties"].(map[string]interface{})), nil)
+			} else if items["type"].(string) == "string" {
+				//fmt.Println("String type")
+				typeAdd = types.S
+			} else if items["type"].(string) == "boolean" {
+				//fmt.Println("Boolean type")
+				typeAdd = types.B
+			} else if items["type"].(string) == "integer" {
+				//fmt.Println("Integer type")
+				typeAdd = types.N
+			} else if items["type"].(string) == "array" {
+				//???
+			} //TODO: More types to implement
+			value = types.NewArray(nil, typeAdd)
+		} else if valueMap["type"].(string) == "string" {
+			//fmt.Println("String type")
+			value = types.S
+		} else if valueMap["type"].(string) == "boolean" {
+			//fmt.Println("Boolean type")
+			value = types.B
+		} else if valueMap["type"].(string) == "integer" {
+			//fmt.Println("Integer type")
+			value = types.N
+		} else if valueMap["type"].(string) == "object" {
+			properties, ok := valueMap["properties"].(map[string]interface{})
+			if ok {
+				value = types.NewObject(c.parseSchemaInterface(properties), nil)
+			}
+		} //TODO: More types to implement
+
+		staticProps = append(staticProps, types.NewStaticProperty(k, value))
+	}
+	return staticProps
+}
+
+func (c *Compiler) setTypesWithSchema(schema interface{}) *Error { //NEW TYPE CHECKING FUNCTION
+	schemaMap, ok := schema.(map[string]interface{})
+	if !ok {
+		return NewError(TypeErr, nil, "unexpected schema type %v", schema)
+	}
+
+	if schemaMap["type"].(string) == "object" {
+		properties, ok := schemaMap["properties"].(map[string]interface{})
+		if !ok {
+			return NewError(TypeErr, nil, "unexpected schema type %v", schema)
+		}
+		staticProps := c.parseSchemaInterface(properties)
+		c.TypeEnv.tree.PutOne(VarTerm("input").Value, types.NewObject(staticProps, nil))
+	}
+	return nil
+}
+
 // checkTypes runs the type checker on all rules. The type checker builds a
 // TypeEnv that is stored on the compiler.
 func (c *Compiler) checkTypes() {
 	// Recursion is caught in earlier step, so this cannot fail.
 	sorted, _ := c.Graph.Sort()
 	checker := newTypeChecker().WithVarRewriter(rewriteVarsInRef(c.RewrittenVars))
+
+	if c.schema != nil {
+		err := c.setTypesWithSchema(c.schema) //NEW TYPE CHECKING WITH SCHEMA
+		if err != nil {
+			c.err(err)
+		}
+	}
+
 	env, errs := checker.CheckTypes(c.TypeEnv, sorted)
 	for _, err := range errs {
 		c.err(err)
 	}
 	c.TypeEnv = env
+
 }
 
 func (c *Compiler) checkUnsafeBuiltins() {
@@ -3694,6 +3774,15 @@ func isInputRef(term *Term) bool {
 func isDataRef(term *Term) bool {
 	if ref, ok := term.Value.(Ref); ok {
 		if ref.HasPrefix(DefaultRootRef) {
+			return true
+		}
+	}
+	return false
+}
+
+func isSchemaRef(term *Term) bool {
+	if ref, ok := term.Value.(Ref); ok {
+		if ref.HasPrefix(SchemaRootRef) {
 			return true
 		}
 	}
