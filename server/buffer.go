@@ -40,8 +40,7 @@ type Info struct {
 	Error      error
 	Metrics    metrics.Metrics
 	Trace      []*topdown.Event
-	Schema     *interface{}
-	SchemaAST  ast.Value
+	Schema     interface{}
 }
 
 // BundleInfo contains information describing a bundle.

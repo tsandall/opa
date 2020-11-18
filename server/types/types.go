@@ -139,7 +139,8 @@ type ProvenanceBundleV1 struct {
 
 // DataRequestV1 models the request message for Data API POST operations.
 type DataRequestV1 struct {
-	Input *interface{} `json:"input"`
+	Input  *interface{} `json:"input"`
+	Schema *interface{} `json:"schema"`
 }
 
 // DataResponseV1 models the response message for Data API read operations.

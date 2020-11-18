@@ -178,6 +178,8 @@ type Params struct {
 	// configured bundles and plugins to be activated/ready before listening for traffic.
 	// A value of 0 or less means no wait is exercised.
 	ReadyTimeout int
+
+	Schema interface{}
 }
 
 // LoggingConfig stores the configuration for OPA's logging behaviour.
@@ -246,7 +248,7 @@ func NewRuntime(ctx context.Context, params Params) (*Runtime, error) {
 		return nil, err
 	}
 
-	manager, err := plugins.New(config, params.ID, inmem.New(), plugins.Info(info), plugins.InitBundles(loaded.Bundles), plugins.InitFiles(loaded.Files), plugins.MaxErrors(params.ErrorLimit), plugins.GracefulShutdownPeriod(params.GracefulShutdownPeriod))
+	manager, err := plugins.New(config, params.ID, inmem.New(), plugins.Info(info), plugins.InitBundles(loaded.Bundles), plugins.InitFiles(loaded.Files), plugins.MaxErrors(params.ErrorLimit), plugins.GracefulShutdownPeriod(params.GracefulShutdownPeriod), plugins.InitSchema(params.Schema))
 	if err != nil {
 		return nil, errors.Wrap(err, "config error")
 	}
@@ -326,7 +328,8 @@ func (rt *Runtime) Serve(ctx context.Context) error {
 		WithDecisionIDFactory(rt.decisionIDFactory).
 		WithDecisionLoggerWithErr(rt.decisionLogger).
 		WithRuntime(rt.Manager.Info).
-		WithMetrics(rt.metrics)
+		WithMetrics(rt.metrics).
+		WithSchema(rt.Params.Schema)
 
 	if rt.Params.DiagnosticAddrs != nil {
 		rt.server = rt.server.WithDiagnosticAddresses(*rt.Params.DiagnosticAddrs)

@@ -1,4 +1,4 @@
-module github.com/aavarghese/opa
+module github.com/open-policy-agent/opa
 
 go 1.12
 

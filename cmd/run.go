@@ -15,6 +15,7 @@ import (
 
 	"github.com/spf13/cobra"
 
+	fileurl "github.com/open-policy-agent/opa/internal/file/url"
 	"github.com/open-policy-agent/opa/runtime"
 	"github.com/open-policy-agent/opa/server"
 	"github.com/open-policy-agent/opa/util"
@@ -43,6 +44,7 @@ type runCmdParams struct {
 	pubKeyID           string
 	skipBundleVerify   bool
 	excludeVerifyFiles []string
+	schemaPath         string
 }
 
 func newRunParams() runCmdParams {
@@ -182,6 +184,7 @@ To skip bundle verification, use the --skip-verify flag.
 	runCommand.Flags().VarP(cmdParams.logFormat, "log-format", "", "set log format")
 	runCommand.Flags().IntVar(&cmdParams.rt.GracefulShutdownPeriod, "shutdown-grace-period", 10, "set the time (in seconds) that the server will wait to gracefully shut down")
 	runCommand.Flags().IntVar(&cmdParams.rt.ShutdownWaitPeriod, "shutdown-wait-period", 0, "set the time (in seconds) that the server will wait before initiating shutdown")
+	runCommand.Flags().StringVarP(&cmdParams.schemaPath, "schema", "S", "", "set path of schema directory or file")
 	addConfigOverrides(runCommand.Flags(), &cmdParams.rt.ConfigOverrides)
 	addConfigOverrideFiles(runCommand.Flags(), &cmdParams.rt.ConfigOverrideFiles)
 	addBundleModeFlag(runCommand.Flags(), &cmdParams.rt.BundleMode, false)
@@ -259,12 +262,35 @@ func initRuntime(ctx context.Context, params runCmdParams, args []string) (*runt
 		return nil, fmt.Errorf("enable bundle mode (ie. --bundle) to verify bundle files or directories")
 	}
 
+	schemaBytes, err := loadSchema(params)
+	if err != nil {
+		return nil, err
+	} else if schemaBytes != nil {
+		var schema interface{}
+		err := util.Unmarshal(schemaBytes, &schema)
+		if err != nil {
+			return nil, fmt.Errorf("unable to parse schema: %s", err.Error())
+		}
+		params.rt.Schema = schema
+	}
+
 	rt, err := runtime.NewRuntime(ctx, params.rt)
 	if err != nil {
 		return nil, err
 	}
 
 	return rt, nil
+}
+
+func loadSchema(params runCmdParams) ([]byte, error) {
+	if params.schemaPath != "" {
+		path, err := fileurl.Clean(params.schemaPath) //TODO: Modify this later for reading a DIRECTORY of files
+		if err != nil {
+			return nil, err
+		}
+		return ioutil.ReadFile(path)
+	}
+	return nil, nil
 }
 
 func startRuntime(ctx context.Context, rt *runtime.Runtime, serverMode bool) {

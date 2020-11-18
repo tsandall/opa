@@ -147,6 +147,7 @@ type Manager struct {
 	initialized                  bool
 	interQueryBuiltinCacheConfig *cache.Config
 	gracefulShutdownPeriod       int
+	schema                       interface{}
 }
 
 type managerContextKey string
@@ -221,6 +222,13 @@ func InitBundles(b map[string]*bundle.Bundle) func(*Manager) {
 func InitFiles(f loader.Result) func(*Manager) {
 	return func(m *Manager) {
 		m.initFiles = f
+	}
+}
+
+// InitFiles provides the initial set of other data/policy files to load.
+func InitSchema(f interface{}) func(*Manager) {
+	return func(m *Manager) {
+		m.schema = f
 	}
 }
 
@@ -301,6 +309,7 @@ func (m *Manager) Init(ctx context.Context) error {
 			Files:     m.initFiles,
 			Bundles:   m.initBundles,
 			MaxErrors: m.maxErrors,
+			Schema:    m.schema,
 		})
 
 		if err != nil {

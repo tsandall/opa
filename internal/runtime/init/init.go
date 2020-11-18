@@ -27,6 +27,7 @@ type InsertAndCompileOptions struct {
 	Files     loader.Result
 	Bundles   map[string]*bundle.Bundle
 	MaxErrors int
+	Schema    interface{}
 }
 
 // InsertAndCompileResult contains the output of the operation.
@@ -62,6 +63,7 @@ func InsertAndCompile(ctx context.Context, opts InsertAndCompileOptions) (*Inser
 		Metrics:      m,
 		Bundles:      opts.Bundles,
 		ExtraModules: policies,
+		Schema:       opts.Schema,
 	}
 
 	err := bundle.Activate(activation)

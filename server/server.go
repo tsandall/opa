@@ -76,6 +76,7 @@ const (
 	PromHandlerV1Query    = "v1/query"
 	PromHandlerV1Policies = "v1/policies"
 	PromHandlerV1Compile  = "v1/compile"
+	PromHandlerV1Schema   = "v1/schema"
 	PromHandlerIndex      = "index"
 	PromHandlerCatch      = "catchall"
 	PromHandlerHealth     = "health"
@@ -116,6 +117,7 @@ type Server struct {
 	metrics                Metrics
 	defaultDecisionPath    string
 	interQueryBuiltinCache iCache.InterQueryCache
+	schema                 interface{}
 }
 
 // Metrics defines the interface that the server requires for recording HTTP
@@ -307,6 +309,13 @@ func (s *Server) WithRuntime(term *ast.Term) *Server {
 // router is not supplied, the server will create it's own.
 func (s *Server) WithRouter(router *mux.Router) *Server {
 	s.router = router
+	return s
+}
+
+// WithSchema sets the schema in the compiler's type checker. If a
+// schema is not supplied, the server will use the default type system.
+func (s *Server) WithSchema(schema interface{}) *Server {
+	s.schema = schema
 	return s
 }
 
@@ -621,6 +630,10 @@ func (s *Server) initRouters() {
 	s.registerHandler(mainRouter, 1, "/query", http.MethodGet, s.instrumentHandler(s.v1QueryGet, PromHandlerV1Query))
 	s.registerHandler(mainRouter, 1, "/query", http.MethodPost, s.instrumentHandler(s.v1QueryPost, PromHandlerV1Query))
 	s.registerHandler(mainRouter, 1, "/compile", http.MethodPost, s.instrumentHandler(s.v1CompilePost, PromHandlerV1Compile))
+	s.registerHandler(mainRouter, 1, "/schema/{path:.+}", http.MethodGet, s.instrumentHandler(s.v1SchemaGet, PromHandlerV1Schema))
+	s.registerHandler(mainRouter, 1, "/schema", http.MethodGet, s.instrumentHandler(s.v1SchemaGet, PromHandlerV1Schema))
+	s.registerHandler(mainRouter, 1, "/schema/{path:.+}", http.MethodPost, s.instrumentHandler(s.v1SchemaPost, PromHandlerV1Schema))
+	s.registerHandler(mainRouter, 1, "/schema", http.MethodPost, s.instrumentHandler(s.v1SchemaPost, PromHandlerV1Schema))
 	mainRouter.Handle("/", s.instrumentHandler(s.unversionedPost, PromHandlerIndex)).Methods(http.MethodPost)
 	mainRouter.Handle("/", s.instrumentHandler(s.indexGet, PromHandlerIndex)).Methods(http.MethodGet)
 
@@ -647,7 +660,11 @@ func (s *Server) initRouters() {
 		http.MethodConnect, http.MethodDelete, http.MethodOptions, http.MethodTrace, http.MethodPost, http.MethodPut, http.MethodPatch)
 	mainRouter.Handle("/v1/query", s.instrumentHandler(writer.HTTPStatus(405), PromHandlerCatch)).Methods(http.MethodHead,
 		http.MethodConnect, http.MethodDelete, http.MethodOptions, http.MethodTrace, http.MethodPut, http.MethodPatch)
-
+	// v1 Schema catch all
+	mainRouter.Handle("/v1/schema/{path:.*}", s.instrumentHandler(writer.HTTPStatus(405), PromHandlerCatch)).Methods(http.MethodHead,
+		http.MethodConnect, http.MethodOptions, http.MethodTrace)
+	mainRouter.Handle("/v1/schema", s.instrumentHandler(writer.HTTPStatus(405), PromHandlerCatch)).Methods(http.MethodHead,
+		http.MethodConnect, http.MethodDelete, http.MethodOptions, http.MethodTrace)
 	s.Handler = mainRouter
 	s.DiagnosticHandler = diagRouter
 }
@@ -659,7 +676,7 @@ func (s *Server) instrumentHandler(handler func(http.ResponseWriter, *http.Reque
 	return http.HandlerFunc(handler)
 }
 
-func (s *Server) execQuery(ctx context.Context, r *http.Request, txn storage.Transaction, decisionID string, parsedQuery ast.Body, input ast.Value, m metrics.Metrics, explainMode types.ExplainModeV1, includeMetrics, includeInstrumentation, pretty bool, schema ast.Value) (results types.QueryResponseV1, err error) {
+func (s *Server) execQuery(ctx context.Context, r *http.Request, txn storage.Transaction, decisionID string, parsedQuery ast.Body, input ast.Value, m metrics.Metrics, explainMode types.ExplainModeV1, includeMetrics, includeInstrumentation, pretty bool, schema interface{}) (results types.QueryResponseV1, err error) {
 
 	logger := s.getDecisionLogger()
 
@@ -679,11 +696,7 @@ func (s *Server) execQuery(ctx context.Context, r *http.Request, txn storage.Tra
 
 	var rawSchema *interface{}
 	if schema != nil {
-		x, err := ast.JSON(schema)
-		if err != nil {
-			return results, err
-		}
-		rawSchema = &x
+		rawSchema = &schema
 	}
 
 	opts := []func(*rego.Rego){
@@ -692,6 +705,7 @@ func (s *Server) execQuery(ctx context.Context, r *http.Request, txn storage.Tra
 		rego.Compiler(s.getCompiler()),
 		rego.ParsedQuery(parsedQuery),
 		rego.ParsedInput(input),
+		rego.ParsedSchema(schema),
 		rego.Metrics(m),
 		rego.Instrument(includeInstrumentation),
 		rego.QueryTracer(buf),
@@ -710,7 +724,7 @@ func (s *Server) execQuery(ctx context.Context, r *http.Request, txn storage.Tra
 
 	output, err := rego.Eval(ctx)
 	if err != nil {
-		_ = logger.Log(ctx, txn, decisionID, r.RemoteAddr, "", parsedQuery.String(), rawInput, input, nil, err, m, rawSchema, schema)
+		_ = logger.Log(ctx, txn, decisionID, r.RemoteAddr, "", parsedQuery.String(), rawInput, input, nil, err, m, rawSchema)
 		return results, err
 	}
 
@@ -727,7 +741,7 @@ func (s *Server) execQuery(ctx context.Context, r *http.Request, txn storage.Tra
 	}
 
 	var x interface{} = results.Result
-	err = logger.Log(ctx, txn, decisionID, r.RemoteAddr, "", parsedQuery.String(), rawInput, input, &x, nil, m, rawSchema, schema)
+	err = logger.Log(ctx, txn, decisionID, r.RemoteAddr, "", parsedQuery.String(), rawInput, input, &x, nil, m, rawSchema)
 	return results, err
 }
 
@@ -868,22 +882,6 @@ func (s *Server) v0QueryPath(w http.ResponseWriter, r *http.Request, urlPath str
 		goInput = &x
 	}
 
-	schema, err := readSchemaV0(r)
-	if err != nil {
-		writer.ErrorString(w, http.StatusBadRequest, types.CodeInvalidParameter, errors.Wrapf(err, "unexpected parse error for schema"))
-		return
-	}
-
-	var goSchema *interface{}
-	if schema != nil {
-		x, err := ast.JSON(schema)
-		if err != nil {
-			writer.ErrorString(w, http.StatusInternalServerError, types.CodeInvalidParameter, errors.Wrapf(err, "could not marshal schema"))
-			return
-		}
-		goSchema = &x
-	}
-
 	// Prepare for query.
 	txn, err := s.store.NewTransaction(ctx)
 	if err != nil {
@@ -924,7 +922,7 @@ func (s *Server) v0QueryPath(w http.ResponseWriter, r *http.Request, urlPath str
 
 		pq, err := rego.New(opts...).PrepareForEval(ctx)
 		if err != nil {
-			_ = logger.Log(ctx, txn, decisionID, r.RemoteAddr, urlPath, "", goInput, input, nil, err, m, goSchema, schema)
+			_ = logger.Log(ctx, txn, decisionID, r.RemoteAddr, urlPath, "", goInput, input, nil, err, m, nil)
 			writer.ErrorAuto(w, err)
 			return
 		}
@@ -948,14 +946,14 @@ func (s *Server) v0QueryPath(w http.ResponseWriter, r *http.Request, urlPath str
 
 	// Handle results.
 	if err != nil {
-		_ = logger.Log(ctx, txn, decisionID, r.RemoteAddr, urlPath, "", goInput, input, nil, err, m, goSchema, schema)
+		_ = logger.Log(ctx, txn, decisionID, r.RemoteAddr, urlPath, "", goInput, input, nil, err, m, nil)
 		writer.ErrorAuto(w, err)
 		return
 	}
 
 	if len(rs) == 0 {
 		err := types.NewErrorV1(types.CodeUndefinedDocument, fmt.Sprintf("%v: %v", types.MsgUndefinedError, stringPathToDataRef(urlPath)))
-		if logErr := logger.Log(ctx, txn, decisionID, r.RemoteAddr, urlPath, "", goInput, input, nil, err, m, goSchema, schema); logErr != nil {
+		if logErr := logger.Log(ctx, txn, decisionID, r.RemoteAddr, urlPath, "", goInput, input, nil, err, m, nil); logErr != nil {
 			writer.ErrorAuto(w, logErr)
 			return
 		}
@@ -963,7 +961,7 @@ func (s *Server) v0QueryPath(w http.ResponseWriter, r *http.Request, urlPath str
 		writer.Error(w, 404, err)
 		return
 	}
-	err = logger.Log(ctx, txn, decisionID, r.RemoteAddr, urlPath, "", goInput, input, &rs[0].Expressions[0].Value, nil, m, goSchema, schema)
+	err = logger.Log(ctx, txn, decisionID, r.RemoteAddr, urlPath, "", goInput, input, &rs[0].Expressions[0].Value, nil, m, nil)
 	if err != nil {
 		writer.ErrorAuto(w, err)
 		return
@@ -1203,29 +1201,6 @@ func (s *Server) v1DataGet(w http.ResponseWriter, r *http.Request) {
 		goInput = &x
 	}
 
-	schemas := r.URL.Query()[types.ParamSchemaV1]
-
-	var schema ast.Value
-
-	if len(schemas) > 0 {
-		var err error
-		schema, err = readSchemaGetV1(schemas[len(schemas)-1])
-		if err != nil {
-			writer.ErrorString(w, http.StatusBadRequest, types.CodeInvalidParameter, err)
-			return
-		}
-	}
-
-	var goSchema *interface{}
-	if schema != nil {
-		x, err := ast.JSON(schema)
-		if err != nil {
-			writer.ErrorString(w, http.StatusInternalServerError, types.CodeInvalidParameter, errors.Wrapf(err, "could not marshal schema"))
-			return
-		}
-		goSchema = &x
-	}
-
 	m.Timer(metrics.RegoInputParse).Stop()
 
 	// Prepare for query.
@@ -1273,7 +1248,7 @@ func (s *Server) v1DataGet(w http.ResponseWriter, r *http.Request) {
 
 		pq, err := rego.New(opts...).PrepareForEval(ctx)
 		if err != nil {
-			_ = logger.Log(ctx, txn, decisionID, r.RemoteAddr, urlPath, "", goInput, input, nil, err, m, goSchema, schema)
+			_ = logger.Log(ctx, txn, decisionID, r.RemoteAddr, urlPath, "", goInput, input, nil, err, m, nil)
 			writer.ErrorAuto(w, err)
 			return
 		}
@@ -1298,7 +1273,7 @@ func (s *Server) v1DataGet(w http.ResponseWriter, r *http.Request) {
 
 	// Handle results.
 	if err != nil {
-		_ = logger.Log(ctx, txn, decisionID, r.RemoteAddr, urlPath, "", goInput, input, nil, err, m, goSchema, schema)
+		_ = logger.Log(ctx, txn, decisionID, r.RemoteAddr, urlPath, "", goInput, input, nil, err, m, nil)
 		writer.ErrorAuto(w, err)
 		return
 	}
@@ -1322,7 +1297,7 @@ func (s *Server) v1DataGet(w http.ResponseWriter, r *http.Request) {
 				writer.ErrorAuto(w, err)
 			}
 		}
-		err = logger.Log(ctx, txn, decisionID, r.RemoteAddr, urlPath, "", goInput, input, nil, nil, m, goSchema, schema)
+		err = logger.Log(ctx, txn, decisionID, r.RemoteAddr, urlPath, "", goInput, input, nil, nil, m, nil)
 		if err != nil {
 			writer.ErrorAuto(w, err)
 			return
@@ -1337,7 +1312,7 @@ func (s *Server) v1DataGet(w http.ResponseWriter, r *http.Request) {
 		result.Explanation = s.getExplainResponse(explainMode, *buf, pretty)
 	}
 
-	err = logger.Log(ctx, txn, decisionID, r.RemoteAddr, urlPath, "", goInput, input, result.Result, nil, m, goSchema, schema)
+	err = logger.Log(ctx, txn, decisionID, r.RemoteAddr, urlPath, "", goInput, input, result.Result, nil, m, nil)
 	if err != nil {
 		writer.ErrorAuto(w, err)
 		return
@@ -1412,7 +1387,7 @@ func (s *Server) v1DataPost(w http.ResponseWriter, r *http.Request) {
 
 	m.Timer(metrics.RegoInputParse).Start()
 
-	input, err := readInputPostV1(r)
+	input, schema, err := readInputPostV1(r)
 	if err != nil {
 		writer.ErrorString(w, http.StatusBadRequest, types.CodeInvalidParameter, err)
 		return
@@ -1428,20 +1403,16 @@ func (s *Server) v1DataPost(w http.ResponseWriter, r *http.Request) {
 		goInput = &x
 	}
 
-	schema, err := readSchemaPostV1(r)
-	if err != nil {
-		writer.ErrorString(w, http.StatusBadRequest, types.CodeInvalidParameter, err)
-		return
-	}
-
-	var goSchema *interface{}
-	if schema != nil {
-		x, err := ast.JSON(schema)
-		if err != nil {
-			writer.ErrorString(w, http.StatusInternalServerError, types.CodeInvalidParameter, errors.Wrapf(err, "could not marshal schema"))
+	var goSchema interface{}
+	var ok bool
+	if schema != nil { //schema was uploaded via data api
+		goSchema, ok = schema.(map[string]interface{})
+		if !ok {
+			writer.ErrorString(w, http.StatusBadRequest, types.CodeInvalidParameter, err)
 			return
 		}
-		goSchema = &x
+	} else if s.schema != nil { //schema was specified during opa server startup via opa run --server --schema
+		goSchema = s.schema
 	}
 
 	m.Timer(metrics.RegoInputParse).Stop()
@@ -1485,17 +1456,17 @@ func (s *Server) v1DataPost(w http.ResponseWriter, r *http.Request) {
 			}
 		}
 
-		rego, err := s.makeRego(ctx, partial, txn, input, urlPath, m, includeInstrumentation, buf, opts, schema)
+		rego, err := s.makeRego(ctx, partial, txn, input, urlPath, m, includeInstrumentation, buf, opts, goSchema)
 
 		if err != nil {
-			_ = logger.Log(ctx, txn, decisionID, r.RemoteAddr, urlPath, "", goInput, input, nil, err, m, goSchema, schema)
+			_ = logger.Log(ctx, txn, decisionID, r.RemoteAddr, urlPath, "", goInput, input, nil, err, m, goSchema)
 			writer.ErrorAuto(w, err)
 			return
 		}
 
 		pq, err := rego.PrepareForEval(ctx)
 		if err != nil {
-			_ = logger.Log(ctx, txn, decisionID, r.RemoteAddr, urlPath, "", goInput, input, nil, err, m, goSchema, schema)
+			_ = logger.Log(ctx, txn, decisionID, r.RemoteAddr, urlPath, "", goInput, input, nil, err, m, goSchema)
 			writer.ErrorAuto(w, err)
 			return
 		}
@@ -1520,7 +1491,7 @@ func (s *Server) v1DataPost(w http.ResponseWriter, r *http.Request) {
 
 	// Handle results.
 	if err != nil {
-		_ = logger.Log(ctx, txn, decisionID, r.RemoteAddr, urlPath, "", goInput, input, nil, err, m, goSchema, schema)
+		_ = logger.Log(ctx, txn, decisionID, r.RemoteAddr, urlPath, "", goInput, input, nil, err, m, goSchema)
 		writer.ErrorAuto(w, err)
 		return
 	}
@@ -1544,7 +1515,7 @@ func (s *Server) v1DataPost(w http.ResponseWriter, r *http.Request) {
 				writer.ErrorAuto(w, err)
 			}
 		}
-		err = logger.Log(ctx, txn, decisionID, r.RemoteAddr, urlPath, "", goInput, input, nil, nil, m, goSchema, schema)
+		err = logger.Log(ctx, txn, decisionID, r.RemoteAddr, urlPath, "", goInput, input, nil, nil, m, goSchema)
 		if err != nil {
 			writer.ErrorAuto(w, err)
 			return
@@ -1559,7 +1530,7 @@ func (s *Server) v1DataPost(w http.ResponseWriter, r *http.Request) {
 		result.Explanation = s.getExplainResponse(explainMode, *buf, pretty)
 	}
 
-	err = logger.Log(ctx, txn, decisionID, r.RemoteAddr, urlPath, "", goInput, input, result.Result, nil, m, goSchema, schema)
+	err = logger.Log(ctx, txn, decisionID, r.RemoteAddr, urlPath, "", goInput, input, result.Result, nil, m, goSchema)
 	if err != nil {
 		writer.ErrorAuto(w, err)
 		return
@@ -1666,6 +1637,306 @@ func (s *Server) v1DataDelete(w http.ResponseWriter, r *http.Request) {
 	} else {
 		writer.Bytes(w, 204, nil)
 	}
+}
+
+//TODO: Remove if not needed
+func (s *Server) v1SchemaGet(w http.ResponseWriter, r *http.Request) {
+	m := metrics.New()
+
+	m.Timer(metrics.ServerHandler).Start()
+
+	decisionID := s.generateDecisionID()
+
+	ctx := r.Context()
+	vars := mux.Vars(r)
+	urlPath := vars["path"]
+	pretty := getBoolParam(r.URL, types.ParamPrettyV1, true)
+	explainMode := getExplain(r.URL.Query()["explain"], types.ExplainOffV1)
+	includeMetrics := getBoolParam(r.URL, types.ParamMetricsV1, true)
+	includeInstrumentation := getBoolParam(r.URL, types.ParamInstrumentV1, true)
+	provenance := getBoolParam(r.URL, types.ParamProvenanceV1, true)
+	strictBuiltinErrors := getBoolParam(r.URL, types.ParamStrictBuiltinErrors, true)
+
+	m.Timer(metrics.RegoInputParse).Start()
+
+	schemas := r.URL.Query()[types.ParamSchemaV1]
+	var schema interface{}
+	if len(schemas) > 0 {
+		var err error
+		schema, err = readSchemaGetV1(schemas[len(schemas)-1])
+		if err != nil {
+			writer.ErrorString(w, http.StatusBadRequest, types.CodeInvalidParameter, err)
+			return
+		}
+	}
+
+	m.Timer(metrics.RegoInputParse).Stop()
+
+	// Prepare for query.
+	txn, err := s.store.NewTransaction(ctx)
+	if err != nil {
+		writer.ErrorAuto(w, err)
+		return
+	}
+	defer s.store.Abort(ctx, txn)
+
+	logger := s.getDecisionLogger()
+
+	var buf *topdown.BufferTracer
+
+	if explainMode != types.ExplainOffV1 {
+		buf = topdown.NewBufferTracer()
+	}
+
+	pqID := "v1SchemaGet::"
+	if strictBuiltinErrors {
+		pqID += "strict-builtin-errors::"
+	}
+	pqID += urlPath
+	preparedQuery, ok := s.getCachedPreparedEvalQuery(pqID, m)
+	if !ok {
+		opts := []func(*rego.Rego){
+			rego.Compiler(s.getCompiler()),
+			rego.Store(s.store),
+			rego.Transaction(txn),
+			rego.ParsedSchema(schema),
+			rego.Query(stringPathToDataRef(urlPath).String()),
+			rego.Metrics(m),
+			rego.QueryTracer(buf),
+			rego.Instrument(includeInstrumentation),
+			rego.Runtime(s.runtime),
+			rego.UnsafeBuiltins(unsafeBuiltinsMap),
+			rego.StrictBuiltinErrors(strictBuiltinErrors),
+		}
+
+		for _, r := range s.manager.GetWasmResolvers() {
+			for _, entrypoint := range r.Entrypoints() {
+				opts = append(opts, rego.Resolver(entrypoint, r))
+			}
+		}
+
+		pq, err := rego.New(opts...).PrepareForEval(ctx)
+		if err != nil {
+			_ = logger.Log(ctx, txn, decisionID, r.RemoteAddr, urlPath, "", nil, nil, nil, err, m, schema)
+			writer.ErrorAuto(w, err)
+			return
+		}
+		preparedQuery = &pq
+		s.preparedEvalQueries.Insert(pqID, preparedQuery)
+	}
+
+	evalOpts := []rego.EvalOption{
+		rego.EvalTransaction(txn),
+		rego.EvalSchema(schema),
+		rego.EvalMetrics(m),
+		rego.EvalQueryTracer(buf),
+		rego.EvalInterQueryBuiltinCache(s.interQueryBuiltinCache),
+	}
+
+	rs, err := preparedQuery.Eval(
+		ctx,
+		evalOpts...,
+	)
+
+	m.Timer(metrics.ServerHandler).Stop()
+
+	// Handle results.
+	if err != nil {
+		_ = logger.Log(ctx, txn, decisionID, r.RemoteAddr, urlPath, "", nil, nil, nil, err, m, schema)
+		writer.ErrorAuto(w, err)
+		return
+	}
+
+	result := types.DataResponseV1{
+		DecisionID: decisionID,
+	}
+
+	if includeMetrics || includeInstrumentation {
+		result.Metrics = m.All()
+	}
+
+	if provenance {
+		result.Provenance = s.getProvenance()
+	}
+
+	if len(rs) == 0 {
+		if explainMode == types.ExplainFullV1 {
+			result.Explanation, err = types.NewTraceV1(*buf, pretty)
+			if err != nil {
+				writer.ErrorAuto(w, err)
+			}
+		}
+		err = logger.Log(ctx, txn, decisionID, r.RemoteAddr, urlPath, "", nil, nil, nil, nil, m, schema)
+		if err != nil {
+			writer.ErrorAuto(w, err)
+			return
+		}
+		writer.JSON(w, 200, result, pretty)
+		return
+	}
+
+	result.Result = &rs[0].Expressions[0].Value
+
+	if explainMode != types.ExplainOffV1 {
+		result.Explanation = s.getExplainResponse(explainMode, *buf, pretty)
+	}
+
+	err = logger.Log(ctx, txn, decisionID, r.RemoteAddr, urlPath, "", nil, nil, result.Result, nil, m, schema)
+	if err != nil {
+		writer.ErrorAuto(w, err)
+		return
+	}
+	writer.JSON(w, 200, result, pretty)
+}
+
+//TODO: Remove if not needed
+func (s *Server) v1SchemaPost(w http.ResponseWriter, r *http.Request) {
+	m := metrics.New()
+	m.Timer(metrics.ServerHandler).Start()
+
+	decisionID := s.generateDecisionID()
+
+	ctx := r.Context()
+	vars := mux.Vars(r)
+	urlPath := vars["path"]
+	pretty := getBoolParam(r.URL, types.ParamPrettyV1, true)
+	explainMode := getExplain(r.URL.Query()[types.ParamExplainV1], types.ExplainOffV1)
+	includeMetrics := getBoolParam(r.URL, types.ParamMetricsV1, true)
+	includeInstrumentation := getBoolParam(r.URL, types.ParamInstrumentV1, true)
+	partial := getBoolParam(r.URL, types.ParamPartialV1, true)
+	provenance := getBoolParam(r.URL, types.ParamProvenanceV1, true)
+	strictBuiltinErrors := getBoolParam(r.URL, types.ParamStrictBuiltinErrors, true)
+
+	m.Timer(metrics.RegoInputParse).Start()
+
+	schemaData, err := readSchemaPostV1(r)
+	schema, ok := schemaData.(map[string]interface{})
+	if err != nil {
+		writer.ErrorString(w, http.StatusBadRequest, types.CodeInvalidParameter, err)
+		return
+	}
+
+	m.Timer(metrics.RegoInputParse).Stop()
+
+	txn, err := s.store.NewTransaction(ctx)
+	if err != nil {
+		writer.ErrorAuto(w, err)
+		return
+	}
+	defer s.store.Abort(ctx, txn)
+
+	logger := s.getDecisionLogger()
+
+	var buf *topdown.BufferTracer
+
+	if explainMode != types.ExplainOffV1 {
+		buf = topdown.NewBufferTracer()
+	}
+
+	pqID := "v1SchemaPost::"
+	if partial {
+		pqID += "partial::"
+	}
+	if strictBuiltinErrors {
+		pqID += "strict-builtin-errors::"
+	}
+	pqID += urlPath
+	preparedQuery, ok := s.getCachedPreparedEvalQuery(pqID, m)
+	if !ok {
+		opts := []func(*rego.Rego){
+			rego.Compiler(s.getCompiler()),
+			rego.Store(s.store),
+			rego.StrictBuiltinErrors(strictBuiltinErrors),
+		}
+
+		// Set resolvers on the base Rego object to avoid having them get
+		// re-initialized, and to propagate them to the prepared query.
+		for _, r := range s.manager.GetWasmResolvers() {
+			for _, entrypoint := range r.Entrypoints() {
+				opts = append(opts, rego.Resolver(entrypoint, r))
+			}
+		}
+
+		rego, err := s.makeRego(ctx, partial, txn, nil, urlPath, m, includeInstrumentation, buf, opts, schema)
+
+		if err != nil {
+			_ = logger.Log(ctx, txn, decisionID, r.RemoteAddr, urlPath, "", nil, nil, nil, err, m, schema)
+			writer.ErrorAuto(w, err)
+			return
+		}
+
+		pq, err := rego.PrepareForEval(ctx)
+		if err != nil {
+			_ = logger.Log(ctx, txn, decisionID, r.RemoteAddr, urlPath, "", nil, nil, nil, err, m, schema)
+			writer.ErrorAuto(w, err)
+			return
+		}
+		preparedQuery = &pq
+		s.preparedEvalQueries.Insert(pqID, preparedQuery)
+	}
+
+	evalOpts := []rego.EvalOption{
+		rego.EvalTransaction(txn),
+		rego.EvalSchema(schema),
+		rego.EvalMetrics(m),
+		rego.EvalQueryTracer(buf),
+		rego.EvalInterQueryBuiltinCache(s.interQueryBuiltinCache),
+	}
+
+	rs, err := preparedQuery.Eval(
+		ctx,
+		evalOpts...,
+	)
+
+	m.Timer(metrics.ServerHandler).Stop()
+
+	// Handle results.
+	if err != nil {
+		_ = logger.Log(ctx, txn, decisionID, r.RemoteAddr, urlPath, "", nil, nil, nil, err, m, schema)
+		writer.ErrorAuto(w, err)
+		return
+	}
+
+	result := types.DataResponseV1{
+		DecisionID: decisionID,
+	}
+
+	if includeMetrics || includeInstrumentation {
+		result.Metrics = m.All()
+	}
+
+	if provenance {
+		result.Provenance = s.getProvenance()
+	}
+
+	if len(rs) == 0 {
+		if explainMode == types.ExplainFullV1 {
+			result.Explanation, err = types.NewTraceV1(*buf, pretty)
+			if err != nil {
+				writer.ErrorAuto(w, err)
+			}
+		}
+		err = logger.Log(ctx, txn, decisionID, r.RemoteAddr, urlPath, "", nil, nil, nil, nil, m, schema)
+		if err != nil {
+			writer.ErrorAuto(w, err)
+			return
+		}
+		writer.JSON(w, 200, result, pretty)
+		return
+	}
+
+	result.Result = &rs[0].Expressions[0].Value
+
+	if explainMode != types.ExplainOffV1 {
+		result.Explanation = s.getExplainResponse(explainMode, *buf, pretty)
+	}
+
+	err = logger.Log(ctx, txn, decisionID, r.RemoteAddr, urlPath, "", nil, nil, result.Result, nil, m, schema)
+	if err != nil {
+		writer.ErrorAuto(w, err)
+		return
+	}
+	writer.JSON(w, 200, result, pretty)
 }
 
 func (s *Server) v1PoliciesDelete(w http.ResponseWriter, r *http.Request) {
@@ -2153,7 +2424,7 @@ func (s *Server) getCompiler() *ast.Compiler {
 	return s.manager.GetCompiler()
 }
 
-func (s *Server) makeRego(ctx context.Context, partial bool, txn storage.Transaction, input ast.Value, urlPath string, m metrics.Metrics, instrument bool, tracer topdown.QueryTracer, opts []func(*rego.Rego), schema ast.Value) (*rego.Rego, error) {
+func (s *Server) makeRego(ctx context.Context, partial bool, txn storage.Transaction, input ast.Value, urlPath string, m metrics.Metrics, instrument bool, tracer topdown.QueryTracer, opts []func(*rego.Rego), schema interface{}) (*rego.Rego, error) {
 	queryPath := stringPathToDataRef(urlPath).String()
 
 	opts = append(
@@ -2418,12 +2689,12 @@ func readInputGetV1(str string) (ast.Value, error) {
 	return ast.InterfaceToValue(input)
 }
 
-func readInputPostV1(r *http.Request) (ast.Value, error) {
+func readInputPostV1(r *http.Request) (ast.Value, interface{}, error) {
 
 	bs, err := ioutil.ReadAll(r.Body)
 
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 
 	if len(bs) > 0 {
@@ -2436,53 +2707,38 @@ func readInputPostV1(r *http.Request) (ast.Value, error) {
 		// anything related
 		if strings.Contains(ct, "yaml") {
 			if err := util.Unmarshal(bs, &request); err != nil {
-				return nil, errors.Wrapf(err, "body contains malformed input document")
+				return nil, nil, errors.Wrapf(err, "body contains malformed input document")
 			}
 		} else if err := util.UnmarshalJSON(bs, &request); err != nil {
-			return nil, errors.Wrapf(err, "body contains malformed input document")
+			return nil, nil, errors.Wrapf(err, "body contains malformed input document")
 		}
 
-		if request.Input == nil {
-			return nil, nil
+		var input ast.Value = nil
+		var schema interface{} = nil
+		if request.Input != nil {
+			input, err = ast.InterfaceToValue(*request.Input)
+			if err != nil {
+				return nil, nil, err
+			}
 		}
-
-		return ast.InterfaceToValue(*request.Input)
+		if request.Schema != nil {
+			schema = *request.Schema
+		}
+		return input, schema, nil
 	}
 
-	return nil, nil
+	return nil, nil, nil
 }
 
-func readSchemaV0(r *http.Request) (ast.Value, error) {
-	bs, err := ioutil.ReadAll(r.Body)
-	if err != nil {
-		return nil, err
-	}
-	bs = bytes.TrimSpace(bs)
-	if len(bs) == 0 {
-		return nil, nil
-	}
-	var x interface{}
-
-	if strings.Contains(r.Header.Get("Content-Type"), "yaml") {
-		if err := util.Unmarshal(bs, &x); err != nil {
-			return nil, err
-		}
-	} else if err := util.UnmarshalJSON(bs, &x); err != nil {
-		return nil, err
-	}
-
-	return ast.InterfaceToValue(x)
-}
-
-func readSchemaGetV1(str string) (ast.Value, error) {
+func readSchemaGetV1(str string) (interface{}, error) {
 	var schema interface{}
 	if err := util.UnmarshalJSON([]byte(str), &schema); err != nil {
 		return nil, errors.Wrapf(err, "parameter contains malformed schema document")
 	}
-	return ast.InterfaceToValue(schema)
+	return schema, nil
 }
 
-func readSchemaPostV1(r *http.Request) (ast.Value, error) {
+func readSchemaPostV1(r *http.Request) (interface{}, error) {
 
 	bs, err := ioutil.ReadAll(r.Body)
 
@@ -2510,7 +2766,7 @@ func readSchemaPostV1(r *http.Request) (ast.Value, error) {
 			return nil, nil
 		}
 
-		return ast.InterfaceToValue(*request.Schema)
+		return *request.Schema, nil
 	}
 
 	return nil, nil
@@ -2668,7 +2924,7 @@ type decisionLogger struct {
 	buffer    Buffer
 }
 
-func (l decisionLogger) Log(ctx context.Context, txn storage.Transaction, decisionID, remoteAddr, path string, query string, goInput *interface{}, astInput ast.Value, goResults *interface{}, err error, m metrics.Metrics, goSchema *interface{}, astSchema ast.Value) error {
+func (l decisionLogger) Log(ctx context.Context, txn storage.Transaction, decisionID, remoteAddr, path string, query string, goInput *interface{}, astInput ast.Value, goResults *interface{}, err error, m metrics.Metrics, goSchema interface{}) error {
 
 	bundles := map[string]BundleInfo{}
 	for name, rev := range l.revisions {
@@ -2690,7 +2946,6 @@ func (l decisionLogger) Log(ctx context.Context, txn storage.Transaction, decisi
 		Error:      err,
 		Metrics:    m,
 		Schema:     goSchema,
-		SchemaAST:  astSchema,
 	}
 
 	if l.logger != nil {

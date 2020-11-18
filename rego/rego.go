@@ -1738,7 +1738,7 @@ func (r *Rego) compileAndCacheQuery(qType queryType, query ast.Body, m metrics.M
 		return nil
 	}
 
-	qc, compiled, err := r.compileQuery(query, m, extras)
+	qc, compiled, err := r.compileQuery(query, m, extras) //AAV
 	if err != nil {
 		return err
 	}
@@ -1782,9 +1782,16 @@ func (r *Rego) compileQuery(query ast.Body, m metrics.Metrics, extras []extraSta
 		WithPackage(pkg).
 		WithImports(imports)
 
-	qc := r.compiler.QueryCompiler().
-		WithContext(qctx).
-		WithUnsafeBuiltins(r.unsafeBuiltins)
+	var qc ast.QueryCompiler
+	if r.parsedSchema != nil {
+		qc = r.compiler.QueryCompilerWithSchema(r.parsedSchema).
+			WithContext(qctx).
+			WithUnsafeBuiltins(r.unsafeBuiltins)
+	} else {
+		qc = r.compiler.QueryCompiler().
+			WithContext(qctx).
+			WithUnsafeBuiltins(r.unsafeBuiltins)
+	}
 
 	for _, extra := range extras {
 		qc = qc.WithStageAfter(extra.after, extra.stage)

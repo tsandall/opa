@@ -28,7 +28,7 @@ action_allowed {
 }
 
 action_allowed {
-  http_request.method == "GET"
+  http_request.blah.method == "GET"
   token.payload.role == "admin"
   glob.match("/people*", [], http_request.path)
 }

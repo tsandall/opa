@@ -333,6 +333,12 @@ func (c *Compiler) QueryCompiler() QueryCompiler {
 	return newQueryCompiler(c)
 }
 
+// CompileWithSchema runs the compilation process on the input modules.
+func (c *Compiler) QueryCompilerWithSchema(schema interface{}) QueryCompiler {
+	c.schema = schema
+	return c.QueryCompiler()
+}
+
 // Compile runs the compilation process on the input modules. The compiled
 // version of the modules and associated data structures are stored on the
 // compiler. If the compilation process fails for any reason, the compiler will
@@ -1606,8 +1612,22 @@ func (qc *queryCompiler) checkSafety(_ *QueryContext, body Body) (Body, error) {
 
 func (qc *queryCompiler) checkTypes(qctx *QueryContext, body Body) (Body, error) {
 	var errs Errors
+	sorted, _ := qc.compiler.Graph.Sort()
 	checker := newTypeChecker().WithVarRewriter(rewriteVarsInRef(qc.rewritten, qc.compiler.RewrittenVars))
+
+	if qc.compiler.schema != nil {
+		err := qc.compiler.setTypesWithSchema(qc.compiler.schema) //NEW TYPE CHECKING WITH SCHEMA
+		if err != nil {
+			qc.compiler.err(err)
+		}
+	}
+
 	qc.typeEnv, errs = checker.CheckBody(qc.compiler.TypeEnv, body)
+	if len(errs) > 0 {
+		return nil, errs
+	}
+
+	qc.typeEnv, errs = checker.CheckTypes(qc.typeEnv, sorted) //NEW TYPE CHECKING ON THE RULES
 	if len(errs) > 0 {
 		return nil, errs
 	}
@@ -3774,15 +3794,6 @@ func isInputRef(term *Term) bool {
 func isDataRef(term *Term) bool {
 	if ref, ok := term.Value.(Ref); ok {
 		if ref.HasPrefix(DefaultRootRef) {
-			return true
-		}
-	}
-	return false
-}
-
-func isSchemaRef(term *Term) bool {
-	if ref, ok := term.Value.(Ref); ok {
-		if ref.HasPrefix(SchemaRootRef) {
 			return true
 		}
 	}
