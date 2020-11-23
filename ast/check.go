@@ -147,6 +147,11 @@ func (tc *typeChecker) checkLanguageBuiltins(env *TypeEnv, builtins map[string]*
 }
 
 func (tc *typeChecker) checkRule(env *TypeEnv, rule *Rule) {
+	// MV - If rule has a schema annotation, then process the schema and add it to TypeEnv
+	if rule.Annotation != nil {
+		fmt.Printf("%v", rule.Annotation)
+	}
+	// MV
 
 	cpy, err := tc.CheckBody(env, rule.Body)
 

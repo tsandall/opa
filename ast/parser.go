@@ -9,6 +9,7 @@ import (
 	"fmt"
 	"io"
 	"math/big"
+	"strings"
 
 	"github.com/open-policy-agent/opa/ast/internal/scanner"
 	"github.com/open-policy-agent/opa/ast/internal/tokens"
@@ -76,6 +77,26 @@ func (p *Parser) WithReader(r io.Reader) *Parser {
 	return p
 }
 
+const schemaAnnot = "@rulesSchema="
+
+// getAnnotation
+// MV - Returns a comment appearing at that line if any
+func (p *Parser) getAnnotation(line int) *SchemaAnnotation {
+	for _, comment := range p.s.comments {
+		if comment.Location.Row == line {
+			text := string(comment.Text)
+			if strings.HasPrefix(text, schemaAnnot) {
+				annot := strings.TrimPrefix(text, schemaAnnot)
+				segs := strings.Split(annot, ":")
+				if len(segs) == 2 {
+					return &SchemaAnnotation{Name: segs[0], Schema: segs[1]}
+				}
+			}
+		}
+	}
+	return nil
+}
+
 // Parse will read the Rego source and parse statements and
 // comments as they are found. Any errors encountered while
 // parsing will be accumulated and returned as a list of Errors.
@@ -131,6 +152,13 @@ func (p *Parser) Parse() ([]Statement, []*Comment, Errors) {
 		if rules := p.parseRules(); rules != nil {
 			for i := range rules {
 				stmts = append(stmts, rules[i])
+				// MV - append annotation to rule if there is one
+				ruleLoc := rules[i].Location.Row
+				annot := p.getAnnotation(ruleLoc - 1)
+				if annot != nil {
+					rules[i].Annotation = annot
+				}
+				// MV
 			}
 			continue
 		} else if len(p.s.errors) > 0 {
