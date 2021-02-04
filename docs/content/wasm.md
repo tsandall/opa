@@ -20,13 +20,6 @@ evaluated with different inputs and external data. This is *not* running the OPA
 server in Wasm, nor is this just cross-compiled Golang code. The compiled Wasm
 module is a planned evaluation path for the source policy and query.
 
-## Current Status
-
-The core language is supported fully but there are a number of built-in
-functions that are not, and probably won't be natively supported in Wasm (e.g.,
-`http.send`). Built-in functions that are not natively supported can be
-implemented in the host environment (e.g., JavaScript).
-
 # Compiling Policies
 
 You can compile Rego policies into Wasm modules using the `opa build` subcommand.
@@ -204,6 +197,10 @@ element:
 
 When the evaluation runs, the `opa_builtin1` callback would invoked with
 `builtin_id` set to `0`.
+
+Many built-in functions are implemented natively for Wasm compiled policies and
+do not have to be supplied by an SDK. The [Built-in Functions](./policy-reference#built-in-functions)
+section indicates which functions must be provided by SDKs.
 
 ### Evaluation
 
