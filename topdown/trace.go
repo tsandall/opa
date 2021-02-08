@@ -78,6 +78,7 @@ type Event struct {
 	LocalMetadata map[ast.Var]VarMetadata // Contains metadata for the local variable bindings. Nil if variables were not included in the trace event.
 	Message       string                  // Contains message for Note events.
 	Ref           *ast.Ref                // Identifies the subject ref for the event. Only applies to Index and Wasm operations.
+	e             *eval
 }
 
 // HasRule returns true if the Event contains an ast.Rule.
@@ -137,6 +138,18 @@ func (evt *Event) equalNodes(other *Event) bool {
 		return other.Node == nil
 	}
 	return false
+}
+
+func (evt *Event) Vars() map[string]interface{} {
+
+	obj := ast.NewObject()
+
+	evt.e.bindings.Iter(nil, func(k, v *ast.Term) error {
+		obj.Insert(ast.StringTerm(k.String()), v)
+		return nil
+	})
+
+	return ast.MustJSON(obj).(map[string]interface{})
 }
 
 // Tracer defines the interface for tracing in the top-down evaluation engine.

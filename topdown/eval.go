@@ -205,6 +205,7 @@ func (e *eval) traceEvent(op Op, x ast.Node, msg string, target *ast.Ref) {
 		Location: x.Loc(),
 		Message:  msg,
 		Ref:      target,
+		e:        e,
 	}
 
 	// Skip plugging the local variables, unless any of the tracers
