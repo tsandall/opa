@@ -12,6 +12,7 @@ import (
 	"crypto/x509"
 	"fmt"
 	"io"
+	"io/ioutil"
 	mr "math/rand"
 	"os"
 	"os/signal"
@@ -41,6 +42,7 @@ import (
 	"github.com/open-policy-agent/opa/repl"
 	"github.com/open-policy-agent/opa/server"
 	"github.com/open-policy-agent/opa/storage"
+	"github.com/open-policy-agent/opa/storage/disk"
 	"github.com/open-policy-agent/opa/storage/inmem"
 	"github.com/open-policy-agent/opa/util"
 	"github.com/open-policy-agent/opa/version"
@@ -246,7 +248,22 @@ func NewRuntime(ctx context.Context, params Params) (*Runtime, error) {
 		return nil, err
 	}
 
-	manager, err := plugins.New(config, params.ID, inmem.New(), plugins.Info(info), plugins.InitBundles(loaded.Bundles), plugins.InitFiles(loaded.Files), plugins.MaxErrors(params.ErrorLimit), plugins.GracefulShutdownPeriod(params.GracefulShutdownPeriod))
+	var store storage.Store
+
+	if os.Getenv("OPA_USE_DISK_STORE") != "" {
+		dir, err := ioutil.TempDir("", "")
+		if err != nil {
+			return nil, err
+		}
+		store, err = disk.New(dir, []storage.Path{{"system"}, {"repl"}, {"example"}})
+		if err != nil {
+			return nil, err
+		}
+	} else {
+		store = inmem.New()
+	}
+
+	manager, err := plugins.New(config, params.ID, store, plugins.Info(info), plugins.InitBundles(loaded.Bundles), plugins.InitFiles(loaded.Files), plugins.MaxErrors(params.ErrorLimit), plugins.GracefulShutdownPeriod(params.GracefulShutdownPeriod))
 	if err != nil {
 		return nil, errors.Wrap(err, "config error")
 	}
