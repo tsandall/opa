@@ -6,6 +6,7 @@ package inmem
 
 import (
 	"container/list"
+	"context"
 	"encoding/json"
 	"strconv"
 
@@ -34,7 +35,7 @@ type transaction struct {
 	xid      uint64
 	write    bool
 	stale    bool
-	db       *store
+	db       *inmem
 	updates  *list.List
 	policies map[string]policyUpdate
 	context  *storage.Context
@@ -45,22 +46,11 @@ type policyUpdate struct {
 	remove bool
 }
 
-func newTransaction(xid uint64, write bool, context *storage.Context, db *store) *transaction {
-	return &transaction{
-		xid:      xid,
-		write:    write,
-		db:       db,
-		policies: map[string]policyUpdate{},
-		updates:  list.New(),
-		context:  context,
-	}
-}
-
 func (txn *transaction) ID() uint64 {
 	return txn.xid
 }
 
-func (txn *transaction) Write(op storage.PatchOp, path storage.Path, value interface{}) error {
+func (txn *transaction) Write(_ context.Context, op storage.PatchOp, path storage.Path, value interface{}) error {
 
 	if !txn.write {
 		return &storage.Error{
@@ -142,7 +132,7 @@ func (txn *transaction) updateRoot(op storage.PatchOp, value interface{}) error 
 	return nil
 }
 
-func (txn *transaction) Commit() (result storage.TriggerEvent) {
+func (txn *transaction) Commit(context.Context) (result storage.TriggerEvent, err error) {
 	result.Context = txn.context
 	for curr := txn.updates.Front(); curr != nil; curr = curr.Next() {
 		action := curr.Value.(*update)
@@ -168,10 +158,14 @@ func (txn *transaction) Commit() (result storage.TriggerEvent) {
 			Removed: update.remove,
 		})
 	}
-	return result
+	return result, nil
 }
 
-func (txn *transaction) Read(path storage.Path) (interface{}, error) {
+func (txn *transaction) Abort(context.Context) {
+
+}
+
+func (txn *transaction) Read(_ context.Context, path storage.Path) (interface{}, error) {
 
 	if !txn.write {
 		return ptr(txn.db.data, path)
@@ -214,7 +208,7 @@ func (txn *transaction) Read(path storage.Path) (interface{}, error) {
 	return cpy, nil
 }
 
-func (txn *transaction) ListPolicies() []string {
+func (txn *transaction) ListPolicies(_ context.Context) ([]string, error) {
 	var ids []string
 	for id := range txn.db.policies {
 		if _, ok := txn.policies[id]; !ok {
@@ -226,10 +220,10 @@ func (txn *transaction) ListPolicies() []string {
 			ids = append(ids, id)
 		}
 	}
-	return ids
+	return ids, nil
 }
 
-func (txn *transaction) GetPolicy(id string) ([]byte, error) {
+func (txn *transaction) GetPolicy(_ context.Context, id string) ([]byte, error) {
 	if update, ok := txn.policies[id]; ok {
 		if !update.remove {
 			return update.value, nil
@@ -242,7 +236,7 @@ func (txn *transaction) GetPolicy(id string) ([]byte, error) {
 	return nil, notFoundErrorf("policy id %q", id)
 }
 
-func (txn *transaction) UpsertPolicy(id string, bs []byte) error {
+func (txn *transaction) UpsertPolicy(_ context.Context, id string, bs []byte) error {
 	if !txn.write {
 		return &storage.Error{
 			Code:    storage.InvalidTransactionErr,
@@ -253,7 +247,7 @@ func (txn *transaction) UpsertPolicy(id string, bs []byte) error {
 	return nil
 }
 
-func (txn *transaction) DeletePolicy(id string) error {
+func (txn *transaction) DeletePolicy(_ context.Context, id string) error {
 	if !txn.write {
 		return &storage.Error{
 			Code:    storage.InvalidTransactionErr,
