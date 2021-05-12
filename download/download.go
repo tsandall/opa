@@ -46,6 +46,7 @@ type Downloader struct {
 	config            Config                        // downloader configuration for tuning polling and other downloader behaviour
 	client            rest.Client                   // HTTP client to use for bundle downloading
 	path              string                        // path to use in bundle download request
+	trigger           chan struct{}                 // channel to signal downloads when manual triggering is enabled
 	stop              chan chan struct{}            // used to signal plugin to stop running
 	f                 func(context.Context, Update) // callback function invoked when download updates occur
 	etag              string                        // HTTP Etag for caching purposes
@@ -59,11 +60,12 @@ type Downloader struct {
 // New returns a new Downloader that can be started.
 func New(config Config, client rest.Client, path string) *Downloader {
 	return &Downloader{
-		config: config,
-		client: client,
-		path:   path,
-		stop:   make(chan chan struct{}),
-		logger: client.Logger(),
+		config:  config,
+		client:  client,
+		path:    path,
+		trigger: make(chan struct{}),
+		stop:    make(chan chan struct{}),
+		logger:  client.Logger(),
 	}
 }
 
@@ -90,6 +92,13 @@ func (d *Downloader) WithBundleVerificationConfig(config *bundle.VerificationCon
 func (d *Downloader) WithSizeLimitBytes(n int64) *Downloader {
 	d.sizeLimitBytes = &n
 	return d
+}
+
+// Trigger returns the downloader's trigger channel that can be used to control
+// when the downloader attempts to download a new bundle in manual triggering
+// mode.
+func (d *Downloader) Trigger() chan struct{} {
+	return d.trigger
 }
 
 // ClearCache resets the etag value on the downloader
@@ -127,44 +136,71 @@ func (d *Downloader) loop(ctx context.Context) {
 
 	var retry int
 
+	// Indicates if the loop should wait. When the triggering mode is manual,
+	// the downloader should not start automatically.
+	wait := *d.config.Trigger == triggerManual
+
 	for {
-		longPoll, err := d.oneShot(ctx)
+
+		var longPoll bool
+		var err error
+
+		if !wait {
+			longPoll, err = d.oneShot(ctx)
+		}
 
 		if ctx.Err() != nil {
 			return
 		}
 
-		var delay time.Duration
+		var waitC chan struct{}
 
-		if err == nil {
-			if !longPoll {
-				if d.config.Polling.LongPollingTimeoutSeconds != nil {
-					d.config.Polling.LongPollingTimeoutSeconds = nil
+		switch *d.config.Trigger {
+		case triggerPolling:
+			var delay time.Duration
+			if err == nil {
+				if !longPoll {
+					if d.config.Polling.LongPollingTimeoutSeconds != nil {
+						d.config.Polling.LongPollingTimeoutSeconds = nil
+					}
+
+					// revert the response header timeout value on the http client's transport
+					if *d.client.Config().ResponseHeaderTimeoutSeconds == 0 {
+						d.client = d.client.SetResponseHeaderTimeout(&d.respHdrTimeoutSec)
+					}
+
+					min := float64(*d.config.Polling.MinDelaySeconds)
+					max := float64(*d.config.Polling.MaxDelaySeconds)
+					delay = time.Duration(((max - min) * rand.Float64()) + min)
 				}
-
-				// revert the response header timeout value on the http client's transport
-				if *d.client.Config().ResponseHeaderTimeoutSeconds == 0 {
-					d.client = d.client.SetResponseHeaderTimeout(&d.respHdrTimeoutSec)
-				}
-
-				min := float64(*d.config.Polling.MinDelaySeconds)
-				max := float64(*d.config.Polling.MaxDelaySeconds)
-				delay = time.Duration(((max - min) * rand.Float64()) + min)
+			} else {
+				delay = util.DefaultBackoff(float64(minRetryDelay), float64(*d.config.Polling.MaxDelaySeconds), retry)
 			}
-		} else {
-			delay = util.DefaultBackoff(float64(minRetryDelay), float64(*d.config.Polling.MaxDelaySeconds), retry)
+			d.logger.Debug("Waiting %v before next download/retry.", delay)
+			timer := time.NewTimer(delay)
+			waitC = make(chan struct{})
+			go func() {
+				select {
+				case <-timer.C:
+					if err != nil {
+						retry++
+					} else {
+						retry = 0
+					}
+					close(waitC)
+				case <-ctx.Done():
+					return
+				}
+			}()
+		case triggerManual:
+			d.logger.Debug("Waiting for manual trigger before next download/retry.")
+			waitC = d.trigger
 		}
 
-		d.logger.Debug("Waiting %v before next download/retry.", delay)
-		timer := time.NewTimer(delay)
-
 		select {
-		case <-timer.C:
-			if err != nil {
-				retry++
-			} else {
-				retry = 0
-			}
+		case <-waitC:
+			wait = false
+			break
 		case <-ctx.Done():
 			return
 		}

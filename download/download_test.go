@@ -294,6 +294,52 @@ func TestEtagInResponse(t *testing.T) {
 	}
 }
 
+func TestTriggerManual(t *testing.T) {
+
+	ctx := context.Background()
+	fixture := newTestFixture(t)
+
+	config := Config{}
+	config.Trigger = &triggerManual
+
+	if err := config.ValidateAndInjectDefaults(); err != nil {
+		t.Fatal(err)
+	}
+
+	updates := make(chan *Update)
+
+	d := New(config, fixture.client, "/bundles/test/bundle1").
+		WithCallback(func(_ context.Context, u Update) {
+			updates <- &u
+		})
+
+	d.Start(ctx)
+
+	ch := d.Trigger()
+
+	// execute a series of triggers and expect responses
+	for i := 0; i < 10; i++ {
+
+		// mutate the fixture server's bundle for this trigger
+		exp := fmt.Sprintf("rev%d", i)
+		b := fixture.server.bundles["test/bundle1"]
+		b.Manifest.Revision = exp
+		fixture.server.bundles["test/bundle1"] = b
+
+		// trigger the downloader
+		ch <- struct{}{}
+
+		// wait for the update
+		u := <-updates
+
+		if u.Bundle.Manifest.Revision != exp {
+			t.Fatalf("expected revision %q but got %q", exp, u.Bundle.Manifest.Revision)
+		}
+	}
+
+	d.Stop(ctx)
+}
+
 type testFixture struct {
 	d                         *Downloader
 	client                    rest.Client

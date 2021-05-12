@@ -14,6 +14,11 @@ const (
 	defaultMaxDelaySeconds = int64(120)
 )
 
+var (
+	triggerPolling = "polling"
+	triggerManual  = "manual"
+)
+
 // PollingConfig represents polling configuration for the downloader.
 type PollingConfig struct {
 	MinDelaySeconds           *int64 `json:"min_delay_seconds,omitempty"`            // min amount of time to wait between successful poll attempts
@@ -23,12 +28,24 @@ type PollingConfig struct {
 
 // Config represents the configuration for the downloader.
 type Config struct {
+	Trigger *string       `json:"trigger,omitempty"`
 	Polling PollingConfig `json:"polling"`
 }
 
 // ValidateAndInjectDefaults checks for configuration errors and ensures all
 // values are set on the Config object.
 func (c *Config) ValidateAndInjectDefaults() error {
+
+	if c.Trigger == nil {
+		c.Trigger = &triggerPolling
+	}
+
+	switch *c.Trigger {
+	case triggerPolling, triggerManual:
+		break
+	default:
+		return fmt.Errorf("invalid trigger mode %q (want %q or %q)", *c.Trigger, triggerPolling, triggerManual)
+	}
 
 	min := defaultMinDelaySeconds
 	max := defaultMaxDelaySeconds
