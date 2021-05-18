@@ -28,6 +28,15 @@ import (
 	"github.com/open-policy-agent/opa/storage"
 )
 
+// Loader defines the interface that the bundle plugin uses to control bundle
+// loading via HTTP, disk, etc.
+type Loader interface {
+	Start(context.Context)
+	Stop(context.Context)
+	Trigger() chan struct{}
+	ClearCache()
+}
+
 // Plugin implements bundle activation.
 type Plugin struct {
 	config            Config
@@ -36,7 +45,7 @@ type Plugin struct {
 	etags             map[string]string                        // etag on last successful activation
 	listeners         map[interface{}]func(Status)             // listeners to send status updates to
 	bulkListeners     map[interface{}]func(map[string]*Status) // listeners to send aggregated status updates to
-	downloaders       map[string]bundleLoader
+	downloaders       map[string]Loader
 	logger            logging.Logger
 	mtx               sync.Mutex
 	cfgMtx            sync.Mutex
@@ -57,7 +66,7 @@ func New(parsedConfig *Config, manager *plugins.Manager) *Plugin {
 		manager:     manager,
 		config:      *parsedConfig,
 		status:      initialStatus,
-		downloaders: make(map[string]bundleLoader),
+		downloaders: make(map[string]Loader),
 		etags:       make(map[string]string),
 		ready:       false,
 		logger:      manager.Logger(),
@@ -210,6 +219,11 @@ func (p *Plugin) Reconfigure(ctx context.Context, config interface{}) {
 
 }
 
+// Loaders returns the map of bundle loaders configured on this plugin.
+func (p *Plugin) Loaders() map[string]Loader {
+	return p.downloaders
+}
+
 // Register a listener to receive status updates. The name must be comparable.
 // The listener will receive a status update for each bundle configured, they are
 // not going to be aggregated. For all status updates use `RegisterBulkListener`.
@@ -296,7 +310,7 @@ func (p *Plugin) loadAndActivateBundlesFromDisk(ctx context.Context) error {
 	return nil
 }
 
-func (p *Plugin) newDownloader(name string, source *Source) bundleLoader {
+func (p *Plugin) newDownloader(name string, source *Source) Loader {
 
 	if u, err := url.Parse(source.Resource); err == nil {
 		switch u.Scheme {
@@ -596,12 +610,6 @@ func (p *Plugin) getBundlePersistPath() (string, error) {
 	return filepath.Join(persistDir, "bundles"), nil
 }
 
-type bundleLoader interface {
-	Start(context.Context)
-	Stop(context.Context)
-	ClearCache()
-}
-
 type fileLoader struct {
 	name           string
 	path           string
@@ -610,24 +618,9 @@ type fileLoader struct {
 	f              func(context.Context, string, download.Update)
 }
 
-func (fl *fileLoader) Start(context.Context) {
+func (fl *fileLoader) Start(ctx context.Context) {
 	go func() {
-		var u download.Update
-		u.Metrics = metrics.New()
-		f, err := os.Open(fl.path)
-		u.Error = err
-		if err == nil {
-			defer f.Close()
-			b, err := bundle.NewReader(f).
-				WithMetrics(u.Metrics).
-				WithBundleVerificationConfig(fl.bvc).
-				WithSizeLimitBytes(fl.sizeLimitBytes).Read()
-			u.Error = err
-			if err == nil {
-				u.Bundle = &b
-			}
-		}
-		fl.f(context.Background(), fl.name, u)
+		fl.oneShot(ctx)
 	}()
 }
 
@@ -637,4 +630,32 @@ func (*fileLoader) Stop(context.Context) {
 
 func (*fileLoader) ClearCache() {
 
+}
+
+func (fl *fileLoader) Trigger() chan struct{} {
+	ch := make(chan struct{})
+	go func() {
+		<-ch // wait for caller to send trigger
+		fl.oneShot(context.Background())
+	}()
+	return ch
+}
+
+func (fl *fileLoader) oneShot(ctx context.Context) {
+	var u download.Update
+	u.Metrics = metrics.New()
+	f, err := os.Open(fl.path)
+	u.Error = err
+	if err == nil {
+		defer f.Close()
+		b, err := bundle.NewReader(f).
+			WithMetrics(u.Metrics).
+			WithBundleVerificationConfig(fl.bvc).
+			WithSizeLimitBytes(fl.sizeLimitBytes).Read()
+		u.Error = err
+		if err == nil {
+			u.Bundle = &b
+		}
+	}
+	fl.f(ctx, fl.name, u)
 }

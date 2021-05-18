@@ -533,7 +533,7 @@ func TestPluginOneShotActivationPrefixMatchingRoots(t *testing.T) {
 		manager:     manager,
 		status:      map[string]*Status{},
 		etags:       map[string]string{},
-		downloaders: map[string]bundleLoader{},
+		downloaders: map[string]Loader{},
 	}
 	bundleNames := []string{"test-bundle1", "test-bundle2"}
 
@@ -692,7 +692,7 @@ func TestPluginListenerErrorClearedOn304(t *testing.T) {
 		manager:     manager,
 		status:      map[string]*Status{},
 		etags:       map[string]string{},
-		downloaders: map[string]bundleLoader{},
+		downloaders: map[string]Loader{},
 	}
 	bundleName := "test-bundle"
 	plugin.status[bundleName] = &Status{Name: bundleName}
@@ -744,7 +744,7 @@ func TestPluginBulkListener(t *testing.T) {
 		manager:     manager,
 		status:      map[string]*Status{},
 		etags:       map[string]string{},
-		downloaders: map[string]bundleLoader{},
+		downloaders: map[string]Loader{},
 	}
 	bundleNames := []string{
 		"b1",
@@ -933,7 +933,7 @@ func TestPluginBulkListenerStatusCopyOnly(t *testing.T) {
 		manager:     manager,
 		status:      map[string]*Status{},
 		etags:       map[string]string{},
-		downloaders: map[string]bundleLoader{},
+		downloaders: map[string]Loader{},
 	}
 	bundleNames := []string{
 		"b1",
@@ -990,7 +990,7 @@ func TestPluginActivateScopedBundle(t *testing.T) {
 		manager:     manager,
 		status:      map[string]*Status{},
 		etags:       map[string]string{},
-		downloaders: map[string]bundleLoader{},
+		downloaders: map[string]Loader{},
 	}
 	bundleName := "test-bundle"
 	plugin.status[bundleName] = &Status{Name: bundleName}
@@ -1122,7 +1122,7 @@ func TestPluginSetCompilerOnContext(t *testing.T) {
 		manager:     manager,
 		status:      map[string]*Status{},
 		etags:       map[string]string{},
-		downloaders: map[string]bundleLoader{},
+		downloaders: map[string]Loader{},
 	}
 	bundleName := "test-bundle"
 	plugin.status[bundleName] = &Status{Name: bundleName}
@@ -1176,8 +1176,12 @@ func TestPluginSetCompilerOnContext(t *testing.T) {
 }
 
 func getTestManager() *plugins.Manager {
+	return getTestManagerWithOpts(nil)
+}
+
+func getTestManagerWithOpts(config []byte) *plugins.Manager {
 	store := inmem.New()
-	manager, err := plugins.New(nil, "test-instance-id", store)
+	manager, err := plugins.New(config, "test-instance-id", store)
 	if err != nil {
 		panic(err)
 	}
@@ -1387,7 +1391,7 @@ func TestPluginRequestVsDownloadTimestamp(t *testing.T) {
 		manager:     manager,
 		status:      map[string]*Status{},
 		etags:       map[string]string{},
-		downloaders: map[string]bundleLoader{},
+		downloaders: map[string]Loader{},
 	}
 	bundleName := "test-bundle"
 	plugin.status[bundleName] = &Status{Name: bundleName}
@@ -1436,7 +1440,7 @@ func TestUpgradeLegacyBundleToMuiltiBundleSameBundle(t *testing.T) {
 		manager:     manager,
 		status:      map[string]*Status{},
 		etags:       map[string]string{},
-		downloaders: map[string]bundleLoader{},
+		downloaders: map[string]Loader{},
 	}
 	bundleName := "test-bundle"
 	plugin.status[bundleName] = &Status{Name: bundleName}
@@ -1531,7 +1535,7 @@ func TestUpgradeLegacyBundleToMuiltiBundleNewBundles(t *testing.T) {
 		manager:     manager,
 		status:      map[string]*Status{},
 		etags:       map[string]string{},
-		downloaders: map[string]bundleLoader{},
+		downloaders: map[string]Loader{},
 	}
 	bundleName := "test-bundle"
 	plugin.status[bundleName] = &Status{Name: bundleName}
@@ -1957,6 +1961,87 @@ func TestPluginUsingFileLoader(t *testing.T) {
 			t.Fatal("expected successful activation")
 		}
 	})
+
+}
+
+func TestPluginManualTrigger(t *testing.T) {
+
+	ctx := context.Background()
+
+	// setup fake http server with mock bundle
+	mockBundle := bundle.Bundle{
+		Data:    map[string]interface{}{"p": "x1"},
+		Modules: []bundle.ModuleFile{},
+	}
+
+	s := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		bundle.NewWriter(w).Write(mockBundle)
+	}))
+
+	// setup plugin pointing at fake server
+	manager := getTestManagerWithOpts([]byte(fmt.Sprintf(`{
+		"services": {
+			"default": {
+				"url": %q
+			}
+		}
+	}`, s.URL)))
+
+	mode := "manual"
+
+	plugin := New(&Config{
+		Bundles: map[string]*Source{
+			"test": &Source{
+				Service:        "default",
+				SizeLimitBytes: int64(bundle.DefaultSizeLimitBytes),
+				Config:         download.Config{Trigger: &mode},
+			},
+		},
+	}, manager)
+
+	statusCh := make(chan map[string]*Status)
+
+	// register for bundle updates to observe changes and start the plugin
+	plugin.RegisterBulkListener("test-case", func(st map[string]*Status) {
+		statusCh <- st
+	})
+
+	err := plugin.Start(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// manually trigger bundle download
+	ch := plugin.Loaders()["test"].Trigger()
+	ch <- struct{}{}
+
+	// wait for bundle update and then assert on data content
+	<-statusCh
+
+	result, err := storage.ReadOne(context.Background(), manager.Store, storage.Path{"p"})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if !reflect.DeepEqual(result, mockBundle.Data["p"]) {
+		t.Fatalf("expected data to be %v but got %v", mockBundle.Data, result)
+	}
+
+	// update data and trigger another bundle download
+	mockBundle.Data["p"] = "x2"
+	ch <- struct{}{}
+
+	// wait for bundle update and then assert on data content
+	<-statusCh
+
+	result, err = storage.ReadOne(context.Background(), manager.Store, storage.Path{"p"})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if !reflect.DeepEqual(result, mockBundle.Data["p"]) {
+		t.Fatalf("expected data to be %v but got %v", mockBundle.Data, result)
+	}
 
 }
 
