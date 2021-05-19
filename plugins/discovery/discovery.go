@@ -34,15 +34,17 @@ const Name = "discovery"
 // started it will periodically download a configuration bundle and try to
 // reconfigure the OPA.
 type Discovery struct {
-	manager    *plugins.Manager
-	config     *Config
-	factories  map[string]plugins.Factory
-	downloader *download.Downloader // discovery bundle downloader
-	status     *bundle.Status       // discovery status
-	etag       string               // discovery bundle etag for caching purposes
-	metrics    metrics.Metrics
-	readyOnce  sync.Once
-	logger     logging.Logger
+	manager      *plugins.Manager
+	config       *Config
+	factories    map[string]plugins.Factory
+	downloader   *download.Downloader                 // discovery bundle downloader
+	status       *bundle.Status                       // discovery status
+	listenersMtx sync.Mutex                           // lock for listener map
+	listeners    map[interface{}]func(*bundle.Status) // listeners for discovery update eventss
+	etag         string                               // discovery bundle etag for caching purposes
+	metrics      metrics.Metrics
+	readyOnce    sync.Once
+	logger       logging.Logger
 }
 
 // Factories provides a set of factory functions to use for
@@ -123,12 +125,36 @@ func (c *Discovery) Stop(ctx context.Context) {
 func (*Discovery) Reconfigure(context.Context, interface{}) {
 }
 
+func (c *Discovery) Trigger() chan struct{} {
+	return c.downloader.Trigger()
+}
+
+func (c *Discovery) RegisterListener(name interface{}, f func(*bundle.Status)) {
+	c.listenersMtx.Lock()
+	defer c.listenersMtx.Unlock()
+
+	if c.listeners == nil {
+		c.listeners = map[interface{}]func(*bundle.Status){}
+	}
+
+	c.listeners[name] = f
+}
+
 func (c *Discovery) oneShot(ctx context.Context, u download.Update) {
 
 	c.processUpdate(ctx, u)
 
 	if p := status.Lookup(c.manager); p != nil {
 		p.UpdateDiscoveryStatus(*c.status)
+	}
+
+	c.listenersMtx.Lock()
+	defer c.listenersMtx.Unlock()
+
+	cpy := *c.status
+
+	for _, f := range c.listeners {
+		f(&cpy)
 	}
 }
 
