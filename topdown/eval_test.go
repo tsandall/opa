@@ -244,7 +244,7 @@ func TestContainsNestedRefOrCall(t *testing.T) {
 	}
 }
 
-func TestTopdownVirtualCacheFunctions(t *testing.T) {
+func TestTopdownVirtualCache(t *testing.T) {
 	ctx := context.Background()
 	store := inmem.New()
 
@@ -313,6 +313,40 @@ func TestTopdownVirtualCacheFunctions(t *testing.T) {
 			module: `package p
 					f(x) = y { x+input = y }`,
 			query: `data.p.f(1, z) with input as 7; data.p.f(1, z2) with input as 8`,
+			hit:   0,
+			miss:  2,
+		},
+		{
+			note: "partial object: simple",
+			module: `package p
+			s["foo"] = true { true }
+			s["bar"] = true { true }`,
+			query: `data.p.s["foo"]; data.p.s["foo"]`,
+			hit:   1,
+			miss:  1,
+		},
+		{
+			note: "partial set: simple",
+			module: `package p
+			s["foo"] { true }
+			s["bar"] { true }`,
+			query: `data.p.s["foo"]; data.p.s["foo"]`,
+			hit:   1,
+			miss:  1,
+		},
+		{
+			note: "partial set: object",
+			module: `package p
+				s[z] { z := {"foo": "bar"} }`,
+			query: `x = {"foo": "bar"}; data.p.s[x]; data.p.s[x]`,
+			hit:   1,
+			miss:  1,
+		},
+		{
+			note: "partial set: miss",
+			module: `package p
+				s[z] { z = true }`,
+			query: `data.p.s[true]; not data.p.s[false]`,
 			hit:   0,
 			miss:  2,
 		},
