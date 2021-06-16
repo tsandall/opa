@@ -2349,6 +2349,11 @@ func (e evalVirtualPartial) evalCache(iter unifyIterator) (ast.Ref, bool, error)
 		return nil, false, nil
 	}
 
+	if cached := e.e.virtualCache.Get(e.plugged[:e.pos+1]); cached != nil {
+		e.e.instr.counterIncr(evalOpVirtualCacheHit)
+		return nil, true, e.evalTerm(iter, e.pos+1, cached, e.bindings)
+	}
+
 	var cacheKey ast.Ref
 	plugged := e.bindings.Plug(e.ref[e.pos+1])
 
@@ -2360,10 +2365,9 @@ func (e evalVirtualPartial) evalCache(iter unifyIterator) (ast.Ref, bool, error)
 			e.e.instr.counterIncr(evalOpVirtualCacheHit)
 			return nil, true, e.evalTerm(iter, e.pos+2, cached, e.bindings)
 		}
-
-		e.e.instr.counterIncr(evalOpVirtualCacheMiss)
 	}
 
+	e.e.instr.counterIncr(evalOpVirtualCacheMiss)
 	return cacheKey, false, nil
 }
 
