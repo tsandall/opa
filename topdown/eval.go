@@ -2103,12 +2103,19 @@ func (e evalVirtualPartial) evalEachRule(iter unifyIterator, unknown bool) error
 
 func (e evalVirtualPartial) evalAllRules(iter unifyIterator, rules []*ast.Rule) error {
 
-	result := e.empty
+	cacheKey := e.plugged[:e.pos+1]
+	result := e.e.virtualCache.Get(cacheKey)
+	if result != nil {
+		e.e.instr.counterIncr(evalOpVirtualCacheHit)
+		return e.e.biunify(result, e.rterm, e.bindings, e.rbindings, iter)
+	}
+
+	e.e.instr.counterIncr(evalOpVirtualCacheMiss)
+	result = e.empty
 
 	for _, rule := range rules {
 		child := e.e.child(rule.Body)
 		child.traceEnter(rule)
-
 		err := child.eval(func(*eval) error {
 			child.traceExit(rule)
 			var err error
@@ -2124,6 +2131,10 @@ func (e evalVirtualPartial) evalAllRules(iter unifyIterator, rules []*ast.Rule) 
 		if err != nil {
 			return err
 		}
+	}
+
+	if cacheKey != nil {
+		e.e.virtualCache.Put(cacheKey, result)
 	}
 
 	return e.e.biunify(result, e.rterm, e.bindings, e.rbindings, iter)

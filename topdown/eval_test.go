@@ -350,6 +350,17 @@ func TestTopdownVirtualCache(t *testing.T) {
 			hit:   0,
 			miss:  2,
 		},
+		{
+			note: "partial: all rules output cached",
+			module: `package test
+
+				p[x] { x = 1 }
+				p[x] { x = 2 }
+			`,
+			query: "data.test.p = x; data.test.p = y",
+			hit:   1,
+			miss:  1,
+		},
 	}
 
 	for _, tc := range tests {
