@@ -2350,22 +2350,18 @@ func (e evalVirtualPartial) evalCache(iter unifyIterator) (ast.Ref, bool, error)
 	}
 
 	var cacheKey ast.Ref
+	plugged := e.bindings.Plug(e.ref[e.pos+1])
 
-	switch e.ir.Kind {
-	case ast.PartialObjectDoc, ast.PartialSetDoc:
-		plugged := e.bindings.Plug(e.ref[e.pos+1])
+	if plugged.IsGround() {
+		cacheKey = append(e.plugged[:e.pos+1], plugged)
+		cached := e.e.virtualCache.Get(cacheKey)
 
-		if plugged.IsGround() {
-			cacheKey = append(e.plugged[:e.pos+1], plugged)
-			cached := e.e.virtualCache.Get(cacheKey)
-
-			if cached != nil {
-				e.e.instr.counterIncr(evalOpVirtualCacheHit)
-				return nil, true, e.evalTerm(iter, cached, e.bindings)
-			}
-
-			e.e.instr.counterIncr(evalOpVirtualCacheMiss)
+		if cached != nil {
+			e.e.instr.counterIncr(evalOpVirtualCacheHit)
+			return nil, true, e.evalTerm(iter, cached, e.bindings)
 		}
+
+		e.e.instr.counterIncr(evalOpVirtualCacheMiss)
 	}
 
 	return cacheKey, false, nil
