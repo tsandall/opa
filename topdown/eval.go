@@ -2180,7 +2180,7 @@ func (e evalVirtualPartial) evalOneRulePreUnify(iter unifyIterator, rule *ast.Ru
 
 			child.traceExit(rule)
 			term, termbindings := child.bindings.apply(term)
-			err := e.evalTerm(iter, term, termbindings)
+			err := e.evalTerm(iter, e.pos+2, term, termbindings)
 			if err != nil {
 				return err
 			}
@@ -2238,7 +2238,7 @@ func (e evalVirtualPartial) evalOneRuleContinue(iter unifyIterator, rule *ast.Ru
 	}
 
 	term, termbindings := child.bindings.apply(term)
-	err := e.evalTerm(iter, term, termbindings)
+	err := e.evalTerm(iter, e.pos+2, term, termbindings)
 	if err != nil {
 		return err
 	}
@@ -2329,11 +2329,11 @@ func (e evalVirtualPartial) partialEvalSupportRule(rule *ast.Rule, path ast.Ref)
 	return defined, err
 }
 
-func (e evalVirtualPartial) evalTerm(iter unifyIterator, term *ast.Term, termbindings *bindings) error {
+func (e evalVirtualPartial) evalTerm(iter unifyIterator, pos int, term *ast.Term, termbindings *bindings) error {
 	eval := evalTerm{
 		e:            e.e,
 		ref:          e.ref,
-		pos:          e.pos + 2,
+		pos:          pos,
 		bindings:     e.bindings,
 		term:         term,
 		termbindings: termbindings,
@@ -2358,7 +2358,7 @@ func (e evalVirtualPartial) evalCache(iter unifyIterator) (ast.Ref, bool, error)
 
 		if cached != nil {
 			e.e.instr.counterIncr(evalOpVirtualCacheHit)
-			return nil, true, e.evalTerm(iter, cached, e.bindings)
+			return nil, true, e.evalTerm(iter, e.pos+2, cached, e.bindings)
 		}
 
 		e.e.instr.counterIncr(evalOpVirtualCacheMiss)
