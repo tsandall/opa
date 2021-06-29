@@ -593,6 +593,8 @@ func parseModule(filename string, stmts []Statement, comments []*Comment) (*Modu
 
 	for i, stmt := range stmts[1:] {
 		switch stmt := stmt.(type) {
+		case *Require:
+			mod.Requires = append(mod.Requires, stmt)
 		case *Import:
 			mod.Imports = append(mod.Imports, stmt)
 		case *Rule:

@@ -218,6 +218,9 @@ func Compare(a, b interface{}) int {
 	case *Import:
 		b := b.(*Import)
 		return a.Compare(b)
+	case *Require:
+		b := b.(*Require)
+		return a.Compare(b)
 	case *Package:
 		b := b.(*Package)
 		return a.Compare(b)
@@ -283,8 +286,10 @@ func sortOrder(x interface{}) int {
 		return 1001
 	case *Package:
 		return 1002
-	case *Annotations:
+	case *Require:
 		return 1003
+	case *Annotations:
+		return 5000
 	case *Module:
 		return 10000
 	}

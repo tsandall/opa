@@ -46,6 +46,9 @@ func walk(v Visitor, x interface{}) {
 	switch x := x.(type) {
 	case *Module:
 		Walk(w, x.Package)
+		for _, r := range x.Requires {
+			Walk(w, r)
+		}
 		for _, i := range x.Imports {
 			Walk(w, i)
 		}
@@ -60,6 +63,9 @@ func walk(v Visitor, x interface{}) {
 		}
 	case *Package:
 		Walk(w, x.Path)
+	case *Require:
+		Walk(w, x.URL)
+		Walk(w, x.Alias)
 	case *Import:
 		Walk(w, x.Path)
 		Walk(w, x.Alias)
@@ -277,6 +283,9 @@ func (vis *GenericVisitor) Walk(x interface{}) {
 	switch x := x.(type) {
 	case *Module:
 		vis.Walk(x.Package)
+		for _, r := range x.Requires {
+			vis.Walk(r)
+		}
 		for _, i := range x.Imports {
 			vis.Walk(i)
 		}
@@ -291,6 +300,9 @@ func (vis *GenericVisitor) Walk(x interface{}) {
 		}
 	case *Package:
 		vis.Walk(x.Path)
+	case *Require:
+		vis.Walk(x.URL)
+		vis.Walk(x.Alias)
 	case *Import:
 		vis.Walk(x.Path)
 		vis.Walk(x.Alias)
@@ -398,6 +410,9 @@ func (vis *BeforeAfterVisitor) Walk(x interface{}) {
 	switch x := x.(type) {
 	case *Module:
 		vis.Walk(x.Package)
+		for _, r := range x.Requires {
+			vis.Walk(r)
+		}
 		for _, i := range x.Imports {
 			vis.Walk(i)
 		}
@@ -412,6 +427,9 @@ func (vis *BeforeAfterVisitor) Walk(x interface{}) {
 		}
 	case *Package:
 		vis.Walk(x.Path)
+	case *Require:
+		vis.Walk(x.URL)
+		vis.Walk(x.Alias)
 	case *Import:
 		vis.Walk(x.Path)
 		vis.Walk(x.Alias)
@@ -604,17 +622,26 @@ func (vis *VarVisitor) Walk(x interface{}) {
 	switch x := x.(type) {
 	case *Module:
 		vis.Walk(x.Package)
+		for _, r := range x.Requires {
+			vis.Walk(r)
+		}
 		for _, i := range x.Imports {
 			vis.Walk(i)
 		}
 		for _, r := range x.Rules {
 			vis.Walk(r)
 		}
+		for _, a := range x.Annotations {
+			vis.Walk(a)
+		}
 		for _, c := range x.Comments {
 			vis.Walk(c)
 		}
 	case *Package:
 		vis.Walk(x.Path)
+	case *Require:
+		vis.Walk(x.URL)
+		vis.Walk(x.Alias)
 	case *Import:
 		vis.Walk(x.Path)
 		vis.Walk(x.Alias)

@@ -25,6 +25,7 @@ const (
 
 	Package
 	Import
+	Require
 	As
 	Default
 	Else
@@ -73,6 +74,7 @@ var strings = [...]string{
 	Comment:    "comment",
 	Ident:      "ident",
 	Package:    "package",
+	Require:    "require",
 	Import:     "import",
 	As:         "as",
 	Default:    "default",
@@ -114,6 +116,7 @@ var strings = [...]string{
 
 var keywords = map[string]Token{
 	"package": Package,
+	"require": Require,
 	"import":  Import,
 	"as":      As,
 	"default": Default,

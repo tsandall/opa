@@ -50,6 +50,15 @@ func Transform(t Transformer, x interface{}) (interface{}, error) {
 				return nil, fmt.Errorf("illegal transform: %T != %T", y.Imports[i], imp)
 			}
 		}
+		for i := range y.Requires {
+			req, err := Transform(t, y.Requires[i])
+			if err != nil {
+				return nil, err
+			}
+			if y.Requires[i], ok = req.(*Require); !ok {
+				return nil, fmt.Errorf("illegal transform: %T != %T", y.Requires[i], req)
+			}
+		}
 		for i := range y.Rules {
 			rule, err := Transform(t, y.Rules[i])
 			if err != nil {

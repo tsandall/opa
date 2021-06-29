@@ -147,6 +147,16 @@ func (p *Parser) Parse() ([]Statement, []*Comment, Errors) {
 		p.restore(s)
 		s = p.save()
 
+		if req := p.parseRequire(); req != nil {
+			stmts = append(stmts, req)
+			continue
+		} else if len(p.s.errors) > 0 {
+			break
+		}
+
+		p.restore(s)
+		s = p.save()
+
 		if imp := p.parseImport(); imp != nil {
 			stmts = append(stmts, imp)
 			continue
@@ -272,6 +282,52 @@ func (p *Parser) parsePackage() *Package {
 	}
 
 	return &pkg
+}
+
+func (p *Parser) parseRequire() *Require {
+
+	var req Require
+	req.SetLoc(p.s.Loc())
+
+	if p.s.tok != tokens.Require {
+		return nil
+	}
+
+	p.scan()
+	if p.s.tok != tokens.String {
+		p.illegal("expected string")
+		return nil
+	}
+
+	req.URL = p.parseString()
+
+	if req.URL == nil {
+		p.error(p.s.Loc(), "expected string")
+		return nil
+	}
+
+	p.scan()
+
+	if p.s.tok != tokens.As {
+		p.illegal("expected as keyword")
+		return nil
+	}
+
+	p.scan()
+
+	if p.s.tok != tokens.Ident {
+		p.illegal("expected var")
+		return nil
+	}
+
+	var ok bool
+	req.Alias, ok = p.parseTerm().Value.(Var)
+	if !ok {
+		p.illegal("expected var")
+		return nil
+	}
+
+	return &req
 }
 
 func (p *Parser) parseImport() *Import {

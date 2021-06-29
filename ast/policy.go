@@ -12,6 +12,8 @@ import (
 	"strings"
 	"time"
 
+	"github.com/open-policy-agent/opa/ast/internal/tokens"
+
 	"github.com/open-policy-agent/opa/util"
 )
 
@@ -89,29 +91,9 @@ var Wildcard = &Term{Value: Var("_")}
 // prefixed with when the statement they are contained in is parsed.
 var WildcardPrefix = "$"
 
-// Keywords contains strings that map to language keywords.
-var Keywords = [...]string{
-	"not",
-	"package",
-	"import",
-	"as",
-	"default",
-	"else",
-	"with",
-	"null",
-	"true",
-	"false",
-	"some",
-}
-
 // IsKeyword returns true if s is a language keyword.
 func IsKeyword(s string) bool {
-	for _, x := range Keywords {
-		if x == s {
-			return true
-		}
-	}
-	return false
+	return tokens.Keyword(s) != tokens.Ident
 }
 
 type (
@@ -136,6 +118,7 @@ type (
 	// dependencies on external documents (defined by imports).
 	Module struct {
 		Package     *Package       `json:"package"`
+		Requires    []*Require     `json:"requires,omitempty"`
 		Imports     []*Import      `json:"imports,omitempty"`
 		Annotations []*Annotations `json:"annotations,omitempty"`
 		Rules       []*Rule        `json:"rules,omitempty"`
@@ -170,8 +153,15 @@ type (
 		Path     Ref       `json:"path"`
 	}
 
-	// Import represents a dependency on a document outside of the policy
-	// namespace. Imports are optional.
+	// Require represents a dependency on an external document. The document is
+	// mounted in the current package under the alias variable.
+	Require struct {
+		Location *Location `json:"-"`
+		URL      *Term     `json:"url"`
+		Alias    Var       `json:"alias,omitempty"`
+	}
+
+	// Import represents an alias for a document outside. Imports are optional.
 	Import struct {
 		Location *Location `json:"-"`
 		Path     *Term     `json:"path"`
@@ -568,6 +558,56 @@ func (pkg *Package) String() string {
 	path[0] = VarTerm(string(pkg.Path[1].Value.(String)))
 	copy(path[1:], pkg.Path[2:])
 	return fmt.Sprintf("package %v", path)
+}
+
+// Compare returns an integer indicating whether req is less than, equal to,
+// or greater than other.
+func (req *Require) Compare(other *Require) int {
+	if req == nil {
+		if other == nil {
+			return 0
+		}
+		return -1
+	} else if other == nil {
+		return 1
+	}
+	if cmp := Compare(req.URL, other.URL); cmp != 0 {
+		return cmp
+	}
+	return Compare(req.Alias, other.Alias)
+}
+
+// Copy returns a deep copy of req.
+func (req *Require) Copy() *Require {
+	cpy := *req
+	cpy.URL = req.URL.Copy()
+	return &cpy
+}
+
+// Equal returns true if req is equal to other.
+func (req *Require) Equal(other *Require) bool {
+	return req.Compare(other) == 0
+}
+
+// Loc returns the location of the Require in the definition.
+func (req *Require) Loc() *Location {
+	if req == nil {
+		return nil
+	}
+	return req.Location
+}
+
+// SetLoc sets the location on req.
+func (req *Require) SetLoc(loc *Location) {
+	req.Location = loc
+}
+
+func (req *Require) String() string {
+	buf := []string{"require", req.URL.String()}
+	if len(req.Alias) > 0 {
+		buf = append(buf, "as "+req.Alias.String())
+	}
+	return strings.Join(buf, " ")
 }
 
 // IsValidImportPath returns an error indicating if the import path is invalid.
