@@ -5,6 +5,7 @@
 package cmd
 
 import (
+	"context"
 	"fmt"
 	"io"
 	"os"
@@ -12,6 +13,7 @@ import (
 	"github.com/spf13/cobra"
 
 	"github.com/open-policy-agent/opa/ast"
+	"github.com/open-policy-agent/opa/compile/resolver"
 	pr "github.com/open-policy-agent/opa/internal/presentation"
 	"github.com/open-policy-agent/opa/loader"
 	"github.com/open-policy-agent/opa/util"
@@ -110,6 +112,7 @@ func checkModules(args []string) int {
 	compiler := ast.NewCompiler().
 		SetErrorLimit(checkParams.errLimit).
 		WithCapabilities(capabilities).
+		WithDependencyResolver(resolver.New(context.Background())).
 		WithSchemas(ss)
 
 	compiler.Compile(modules)
