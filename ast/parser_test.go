@@ -1031,6 +1031,8 @@ func TestImport(t *testing.T) {
 	assertParseImport(t, "single alias", "import input.foo as bar", &Import{Path: foo, Alias: Var("bar")})
 	assertParseImport(t, "multiple alias", "import input.foo.bar.baz as qux", &Import{Path: foobarbaz, Alias: Var("qux")})
 	assertParseImport(t, "white space", "import input.foo.bar[\"white space\"]", &Import{Path: whitespace})
+	assertParseImport(t, "url", `import "http://localhost:8181/policy.rego" as foo`, &Import{Path: StringTerm("http://localhost:8181/policy.rego"), Alias: Var("foo")})
+	assertParseErrorContains(t, "url missing alias", `import "http://example.com"`, "rego_parse_error: url imports must be named")
 	assertParseErrorContains(t, "non-ground ref", "import data.foo[x]", "rego_parse_error: unexpected var token: expecting string")
 	assertParseErrorContains(t, "non-string", "import input.foo[0]", "rego_parse_error: unexpected number token: expecting string")
 	assertParseErrorContains(t, "unknown root", "import foo.bar", "rego_parse_error: unexpected import path, must begin with one of: {data, input}, got: foo")

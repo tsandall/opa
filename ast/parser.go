@@ -284,14 +284,12 @@ func (p *Parser) parseImport() *Import {
 	}
 
 	p.scan()
-	if p.s.tok != tokens.Ident {
-		p.error(p.s.Loc(), "expected ident")
-		return nil
-	}
-
 	term := p.parseTerm()
+
 	if term != nil {
 		switch v := term.Value.(type) {
+		case String:
+			imp.Path = term
 		case Var:
 			imp.Path = RefTerm(term).SetLocation(term.Location)
 		case Ref:
@@ -306,15 +304,21 @@ func (p *Parser) parseImport() *Import {
 	}
 
 	if imp.Path == nil {
-		p.error(p.s.Loc(), "expected path")
+		p.error(p.s.Loc(), "expected path or url")
 		return nil
 	}
 
-	path := imp.Path.Value.(Ref)
-
-	if !RootDocumentNames.Contains(path[0]) {
-		p.errorf(imp.Path.Location, "unexpected import path, must begin with one of: %v, got: %v", RootDocumentNames, path[0])
-		return nil
+	switch path := imp.Path.Value.(type) {
+	case Ref:
+		if !RootDocumentNames.Contains(path[0]) {
+			p.errorf(imp.Path.Location, "unexpected import path, must begin with one of: %v, got: %v", RootDocumentNames, path[0])
+			return nil
+		}
+	case String:
+		if p.s.tok != tokens.As {
+			p.errorf(imp.Location, "url imports must be named (e.g., import %v as ...)", imp.Path.Loc())
+			return nil
+		}
 	}
 
 	if p.s.tok == tokens.As {
