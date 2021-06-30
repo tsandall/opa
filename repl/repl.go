@@ -18,13 +18,11 @@ import (
 	"strings"
 	"sync"
 
-	"github.com/open-policy-agent/opa/compile"
-
-	"github.com/open-policy-agent/opa/version"
-
 	"github.com/peterh/liner"
 
 	"github.com/open-policy-agent/opa/ast"
+	"github.com/open-policy-agent/opa/compile"
+	"github.com/open-policy-agent/opa/compile/resolver"
 	"github.com/open-policy-agent/opa/format"
 	pr "github.com/open-policy-agent/opa/internal/presentation"
 	"github.com/open-policy-agent/opa/metrics"
@@ -33,6 +31,7 @@ import (
 	"github.com/open-policy-agent/opa/storage"
 	"github.com/open-policy-agent/opa/topdown"
 	"github.com/open-policy-agent/opa/topdown/lineage"
+	"github.com/open-policy-agent/opa/version"
 )
 
 // REPL represents an instance of the interactive shell.
@@ -109,6 +108,26 @@ func defaultModule() *ast.Module {
 
 func defaultPackage() *ast.Package {
 	return ast.MustParsePackage(`package repl`)
+}
+
+func getREPLImports(module *ast.Module) []*ast.Import {
+
+	var imports []*ast.Import
+
+	for _, imp := range module.Imports {
+		if _, ok := imp.Path.Value.(ast.String); !ok {
+			imports = append(imports, imp)
+		} else {
+			// Replace external dependencies from current context with local
+			// dependencies. The external dependencies will have been
+			// resolved when the module for the current context is compiled.
+			imports = append(imports, &ast.Import{
+				Path: ast.NewTerm(module.Package.Path.Append(ast.StringTerm(string(imp.Alias)))),
+			})
+		}
+	}
+
+	return imports
 }
 
 func (r *REPL) getCurrentOrDefaultModule() *ast.Module {
@@ -681,7 +700,7 @@ func (r *REPL) recompile(ctx context.Context, cpy *ast.Module) error {
 		}
 	}
 
-	compiler := ast.NewCompiler().SetErrorLimit(r.errLimit)
+	compiler := ast.NewCompiler().SetErrorLimit(r.errLimit).WithDependencyResolver(resolver.New(ctx))
 
 	if r.instrument {
 		compiler.WithMetrics(r.metrics)
@@ -702,7 +721,8 @@ func (r *REPL) compileBody(ctx context.Context, compiler *ast.Compiler, body ast
 	qctx := ast.NewQueryContext()
 
 	if r.currentModuleID != "" {
-		qctx = qctx.WithPackage(r.modules[r.currentModuleID].Package).WithImports(r.modules[r.currentModuleID].Imports)
+		imports := getREPLImports(r.modules[r.currentModuleID])
+		qctx = qctx.WithPackage(r.modules[r.currentModuleID].Package).WithImports(imports)
 	}
 
 	qc := compiler.QueryCompiler()
@@ -746,7 +766,7 @@ func (r *REPL) compileRule(ctx context.Context, rule *ast.Rule) error {
 		policies[id] = mod
 	}
 
-	compiler := ast.NewCompiler().SetErrorLimit(r.errLimit)
+	compiler := ast.NewCompiler().SetErrorLimit(r.errLimit).WithDependencyResolver(resolver.New(ctx))
 
 	if r.instrument {
 		compiler.WithMetrics(r.metrics)
@@ -846,7 +866,7 @@ func (r *REPL) loadCompiler(ctx context.Context) (*ast.Compiler, error) {
 		policies[id] = mod
 	}
 
-	compiler := ast.NewCompiler().SetErrorLimit(r.errLimit)
+	compiler := ast.NewCompiler().SetErrorLimit(r.errLimit).WithDependencyResolver(resolver.New(ctx))
 
 	if r.instrument {
 		compiler.WithMetrics(r.metrics)
@@ -931,7 +951,7 @@ func (r *REPL) evalBody(ctx context.Context, compiler *ast.Compiler, input ast.V
 		rego.Compiler(compiler),
 		rego.Store(r.store),
 		rego.Transaction(r.txn),
-		rego.ParsedImports(r.getCurrentOrDefaultModule().Imports),
+		rego.ParsedImports(getREPLImports(r.getCurrentOrDefaultModule())),
 		rego.ParsedPackage(r.getCurrentOrDefaultModule().Package),
 		rego.ParsedQuery(body),
 		rego.ParsedInput(input),
@@ -996,7 +1016,7 @@ func (r *REPL) evalPartial(ctx context.Context, compiler *ast.Compiler, input as
 		rego.Compiler(compiler),
 		rego.Store(r.store),
 		rego.Transaction(r.txn),
-		rego.ParsedImports(r.getCurrentOrDefaultModule().Imports),
+		rego.ParsedImports(getREPLImports(r.getCurrentOrDefaultModule())),
 		rego.ParsedPackage(r.getCurrentOrDefaultModule().Package),
 		rego.ParsedQuery(body),
 		rego.ParsedInput(input),
