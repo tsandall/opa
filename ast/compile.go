@@ -88,6 +88,7 @@ type Compiler struct {
 
 	localvargen  *localVarGenerator
 	moduleLoader ModuleLoader
+	depResolver  DependencyResolver
 	ruleIndices  *util.HashMap
 	stages       []struct {
 		name       string
@@ -226,6 +227,7 @@ func NewCompiler() *Compiler {
 		}, func(x util.T) int {
 			return x.(Ref).Hash()
 		}),
+		depResolver:          nopDepResolver{},
 		maxErrs:              CompileErrorLimitDefault,
 		after:                map[string][]CompilerStageDefinition{},
 		unsafeBuiltinsMap:    map[string]struct{}{},
@@ -241,6 +243,7 @@ func NewCompiler() *Compiler {
 		metricName string
 		f          func()
 	}{
+		{"ResolveDeps", "compile_stage_resolve_deps", c.resolveAllDeps},
 		// Reference resolution should run first as it may be used to lazily
 		// load additional modules. If any stages run before resolution, they
 		// need to be re-run after resolution.
@@ -648,6 +651,47 @@ type ModuleLoader func(resolved map[string]*Module) (parsed map[string]*Module, 
 // immediately.
 func (c *Compiler) WithModuleLoader(f ModuleLoader) *Compiler {
 	c.moduleLoader = f
+	return c
+}
+
+// DependencyResolveOptions represents the input to the resolve operation. The
+// supplied modules can be mutated by the receiver.
+type DependencyResolveOptions struct {
+	Modules map[string]*Module
+}
+
+// DependencyResolveResult represents the result of the resolve operation.
+type DependencyResolveResult struct {
+	Result map[string]*Module
+}
+
+// DependencyResolver defines the interface for resolving module dependencies.
+// By default, the compiler will not resolve dependencies. If provided modules
+// contain dependencies, the compiler will return an error.
+type DependencyResolver interface {
+	Resolve(DependencyResolveOptions) (DependencyResolveResult, error)
+}
+
+type nopDepResolver struct{}
+
+func (nopDepResolver) Resolve(opts DependencyResolveOptions) (DependencyResolveResult, error) {
+	var errs Errors
+	for _, module := range opts.Modules {
+		for _, imp := range module.Imports {
+			if _, ok := imp.Path.Value.(String); ok {
+				errs = append(errs, NewError(CompileErr, imp.Loc(), "unresolved dependency %v", imp.Path))
+			}
+		}
+	}
+	if len(errs) > 0 {
+		return DependencyResolveResult{}, errs
+	}
+	return DependencyResolveResult{Result: opts.Modules}, nil
+}
+
+// WithDependencyResolver sets the dependency resolver to use on this compiler.
+func (c *Compiler) WithDependencyResolver(dr DependencyResolver) *Compiler {
+	c.depResolver = dr
 	return c
 }
 
@@ -1078,6 +1122,36 @@ func (c *Compiler) getExports() *util.HashMap {
 	}
 
 	return rules
+}
+
+// resolveAllDeps invokes the compiler's dependency resolver, passing the current
+// set of modules. The result from the dependency resolver overwrites the current
+// set of modules.
+func (c *Compiler) resolveAllDeps() {
+
+	result, err := c.depResolver.Resolve(DependencyResolveOptions{
+		Modules: c.Modules,
+	})
+
+	if err != nil {
+		switch err := err.(type) {
+		case Errors:
+			for i := range err {
+				c.err(err[i])
+			}
+		default:
+			c.err(NewError(CompileErr, nil, err.Error()))
+		}
+		return
+	}
+
+	sorted := make([]string, 0, len(result.Result))
+
+	for name := range result.Result {
+		sorted = append(sorted, name)
+	}
+
+	c.Modules = result.Result
 }
 
 // resolveAllRefs resolves references in expressions to their fully qualified values.
