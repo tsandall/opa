@@ -18,6 +18,7 @@ import (
 
 	"github.com/open-policy-agent/opa/ast"
 	"github.com/open-policy-agent/opa/bundle"
+	"github.com/open-policy-agent/opa/compile/resolver"
 	"github.com/open-policy-agent/opa/internal/compiler/wasm"
 	"github.com/open-policy-agent/opa/internal/debug"
 	"github.com/open-policy-agent/opa/internal/ir"
@@ -183,6 +184,10 @@ func (c *Compiler) Build(ctx context.Context) error {
 		return err
 	}
 
+	if err := c.resolveDeps(ctx); err != nil {
+		return err
+	}
+
 	if err := c.optimize(ctx); err != nil {
 		return err
 	}
@@ -315,6 +320,42 @@ func (c *Compiler) initBundle() error {
 	}
 
 	c.bundle = result
+
+	return nil
+}
+
+func (c *Compiler) resolveDeps(ctx context.Context) error {
+
+	var opts ast.DependencyResolveOptions
+
+	opts.Modules = make(map[string]*ast.Module, len(c.bundle.Modules))
+	files := make(map[string]int, len(c.bundle.Modules))
+
+	for i, mf := range c.bundle.Modules {
+		opts.Modules[mf.URL] = mf.Parsed
+		files[mf.URL] = i
+	}
+
+	dr := resolver.New(ctx)
+	result, err := dr.Resolve(opts)
+
+	if err != nil {
+		return err
+	}
+
+	for url, module := range result.Result {
+		if idx, ok := files[url]; ok {
+			c.bundle.Modules[idx].Parsed = module
+			c.bundle.Modules[idx].Raw = nil
+		} else {
+			c.bundle.Modules = append(c.bundle.Modules, bundle.ModuleFile{
+				URL:    url,
+				Path:   url,
+				Parsed: module,
+				Raw:    nil,
+			})
+		}
+	}
 
 	return nil
 }
