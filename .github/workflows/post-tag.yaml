@@ -81,9 +81,9 @@ jobs:
         # Subsequent jobs will be have the computed tag name
         run: echo "TAG_NAME=${GITHUB_REF##*/}" >> $GITHUB_ENV
 
-      - name: Test
-        run: make ci-release-test
-        timeout-minutes: 60
+      # - name: Test
+      #   run: make ci-release-test
+      #   timeout-minutes: 60
 
       - name: Download release binaries
         uses: actions/download-artifact@v2
