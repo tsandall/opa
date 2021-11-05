@@ -105,4 +105,4 @@ jobs:
         env:
           # Required for the `hub` CLI
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: ./build/github-release.sh --asset-dir=./_release/${TAG_NAME#v}/ --tag=${TAG_NAME}
+        run: ./build/github-release.sh --asset-dir=$(make release-dir) --tag=${TAG_NAME}
