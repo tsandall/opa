@@ -32,10 +32,11 @@ type RuleIndex interface {
 
 // IndexResult contains the result of an index lookup.
 type IndexResult struct {
-	Kind    DocKind
-	Rules   []*Rule
-	Else    map[*Rule][]*Rule
-	Default *Rule
+	Kind      DocKind
+	Rules     []*Rule
+	Else      map[*Rule][]*Rule
+	Default   *Rule
+	EarlyExit bool
 }
 
 // NewIndexResult returns a new IndexResult object.
@@ -137,20 +138,34 @@ func (i *baseDocEqIndex) Lookup(resolver ValueResolver) (*IndexResult, error) {
 	result.Default = i.defaultRule
 	result.Rules = make([]*Rule, 0, len(tr.ordering))
 
+	values := NewSet()
+
+	if i.defaultRule != nil {
+		values.Add(i.defaultRule.Head.Value)
+	}
+
 	for _, pos := range tr.ordering {
 		sort.Slice(tr.unordered[pos], func(i, j int) bool {
 			return tr.unordered[pos][i].prio[1] < tr.unordered[pos][j].prio[1]
 		})
 		nodes := tr.unordered[pos]
 		root := nodes[0].rule
+		// TODO(tsandall): this should never fail but it does in topdown test case: TestTopdownVirtualCache/partial_set:_simple
+		// TODO(tsandall): fix test case in topdown
+		if root.Head.Value != nil {
+			values.Add(root.Head.Value)
+		}
 		result.Rules = append(result.Rules, root)
 		if len(nodes) > 1 {
 			result.Else[root] = make([]*Rule, len(nodes)-1)
 			for i := 1; i < len(nodes); i++ {
 				result.Else[root][i-1] = nodes[i].rule
+				values.Add(nodes[i].rule.Head.Value)
 			}
 		}
 	}
+
+	result.EarlyExit = values.Len() == 1 && IsConstant(values.Slice()[0].Value)
 
 	return result, nil
 }

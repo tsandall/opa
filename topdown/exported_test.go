@@ -35,6 +35,9 @@ func TestOPARego(t *testing.T) {
 
 func testRun(t *testing.T, tc cases.TestCase) {
 
+	// TODO(tsandall): useful for debugging failed cases
+	t.Log(tc.Filename)
+
 	ctx := context.Background()
 
 	modules := map[string]string{}

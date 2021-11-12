@@ -80,6 +80,7 @@ type eval struct {
 	runtime                *ast.Term
 	builtinErrors          *builtinErrors
 	printHook              print.Hook
+	findOne                bool
 }
 
 func (e *eval) Run(iter evalIterator) error {
@@ -114,6 +115,7 @@ func (e *eval) closure(query ast.Body) *eval {
 	cpy.query = query
 	cpy.queryID = cpy.queryIDFact.Next()
 	cpy.parent = e
+	cpy.findOne = false
 	return &cpy
 }
 
@@ -124,6 +126,7 @@ func (e *eval) child(query ast.Body) *eval {
 	cpy.queryID = cpy.queryIDFact.Next()
 	cpy.bindings = newBindings(cpy.queryID, e.instr)
 	cpy.parent = e
+	cpy.findOne = false
 	return &cpy
 }
 
@@ -252,6 +255,13 @@ func (e *eval) traceEvent(op Op, x ast.Node, msg string, target *ast.Ref) {
 	}
 }
 
+type earlyExit struct {
+}
+
+func (earlyExit) Error() string {
+	return "early exit"
+}
+
 func (e *eval) eval(iter evalIterator) error {
 	return e.evalExpr(iter)
 }
@@ -266,7 +276,17 @@ func (e *eval) evalExpr(iter evalIterator) error {
 	}
 
 	if e.index >= len(e.query) {
-		return iter(e)
+		err := iter(e)
+		if err != nil {
+			if _, ok := err.(earlyExit); ok && !e.findOne {
+				return nil
+			}
+			return err
+		}
+		if e.findOne && !e.partial() {
+			return earlyExit{}
+		}
+		return nil
 	}
 
 	expr := e.query[e.index]
@@ -1601,6 +1621,11 @@ func (e evalFunc) eval(iter unifyIterator) error {
 		}
 	}
 
+	return suppressEarlyExit(e.evalValue(iter, argCount, e.ir.EarlyExit))
+}
+
+func (e evalFunc) evalValue(iter unifyIterator, argCount int, findOne bool) error {
+
 	var cacheKey ast.Ref
 	var hit bool
 	var err error
@@ -1616,13 +1641,13 @@ func (e evalFunc) eval(iter unifyIterator) error {
 	var prev *ast.Term
 
 	for i := range e.ir.Rules {
-		next, err := e.evalOneRule(iter, e.ir.Rules[i], cacheKey, prev)
+		next, err := e.evalOneRule(iter, e.ir.Rules[i], cacheKey, prev, findOne)
 		if err != nil {
 			return err
 		}
 		if next == nil {
 			for _, rule := range e.ir.Else[e.ir.Rules[i]] {
-				next, err = e.evalOneRule(iter, rule, cacheKey, prev)
+				next, err = e.evalOneRule(iter, rule, cacheKey, prev, findOne)
 				if err != nil {
 					return err
 				}
@@ -1667,9 +1692,10 @@ func (e evalFunc) evalCache(argCount int, iter unifyIterator) (ast.Ref, bool, er
 	return cacheKey, false, nil
 }
 
-func (e evalFunc) evalOneRule(iter unifyIterator, rule *ast.Rule, cacheKey ast.Ref, prev *ast.Term) (*ast.Term, error) {
+func (e evalFunc) evalOneRule(iter unifyIterator, rule *ast.Rule, cacheKey ast.Ref, prev *ast.Term, findOne bool) (*ast.Term, error) {
 
 	child := e.e.child(rule.Body)
+	child.findOne = findOne
 
 	args := make([]*ast.Term, len(e.terms)-1)
 	copy(args, rule.Head.Args)
@@ -2486,7 +2512,7 @@ func (e evalVirtualComplete) eval(iter unifyIterator) error {
 	}
 
 	if !e.e.unknown(e.ref, e.bindings) {
-		return e.evalValue(iter)
+		return suppressEarlyExit(e.evalValue(iter, e.ir.EarlyExit))
 	}
 
 	var generateSupport bool
@@ -2508,7 +2534,7 @@ func (e evalVirtualComplete) eval(iter unifyIterator) error {
 	return e.partialEval(iter)
 }
 
-func (e evalVirtualComplete) evalValue(iter unifyIterator) error {
+func (e evalVirtualComplete) evalValue(iter unifyIterator, findOne bool) error {
 	cached := e.e.virtualCache.Get(e.plugged[:e.pos+1])
 	if cached != nil {
 		e.e.instr.counterIncr(evalOpVirtualCacheHit)
@@ -2520,13 +2546,13 @@ func (e evalVirtualComplete) evalValue(iter unifyIterator) error {
 	var prev *ast.Term
 
 	for i := range e.ir.Rules {
-		next, err := e.evalValueRule(iter, e.ir.Rules[i], prev)
+		next, err := e.evalValueRule(iter, e.ir.Rules[i], prev, findOne)
 		if err != nil {
 			return err
 		}
 		if next == nil {
 			for _, rule := range e.ir.Else[e.ir.Rules[i]] {
-				next, err = e.evalValueRule(iter, rule, prev)
+				next, err = e.evalValueRule(iter, rule, prev, findOne)
 				if err != nil {
 					return err
 				}
@@ -2541,16 +2567,17 @@ func (e evalVirtualComplete) evalValue(iter unifyIterator) error {
 	}
 
 	if e.ir.Default != nil && prev == nil {
-		_, err := e.evalValueRule(iter, e.ir.Default, prev)
+		_, err := e.evalValueRule(iter, e.ir.Default, prev, findOne)
 		return err
 	}
 
 	return nil
 }
 
-func (e evalVirtualComplete) evalValueRule(iter unifyIterator, rule *ast.Rule, prev *ast.Term) (*ast.Term, error) {
+func (e evalVirtualComplete) evalValueRule(iter unifyIterator, rule *ast.Rule, prev *ast.Term, findOne bool) (*ast.Term, error) {
 
 	child := e.e.child(rule.Body)
+	child.findOne = findOne
 	child.traceEnter(rule)
 	var result *ast.Term
 
@@ -3091,4 +3118,14 @@ func refContainsNonScalar(ref ast.Ref) bool {
 		}
 	}
 	return false
+}
+
+func suppressEarlyExit(err error) error {
+	if err == nil {
+		return nil
+	}
+	if _, ok := err.(earlyExit); ok {
+		return nil
+	}
+	return err
 }
