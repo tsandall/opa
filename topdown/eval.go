@@ -256,6 +256,9 @@ func (e *eval) traceEvent(op Op, x ast.Node, msg string, target *ast.Ref) {
 }
 
 type earlyExit struct {
+	// TODO(tsandall): for traceability perhaps we should point at the previous
+	// EE signal and include a pointer to the eval struct?
+	n int
 }
 
 func (earlyExit) Error() string {
@@ -278,13 +281,15 @@ func (e *eval) evalExpr(iter evalIterator) error {
 	if e.index >= len(e.query) {
 		err := iter(e)
 		if err != nil {
-			if _, ok := err.(earlyExit); ok && !e.findOne {
+			if ee, ok := err.(earlyExit); ok && !e.findOne {
 				return nil
+			} else if ok {
+				return earlyExit{n: ee.n + 1}
 			}
 			return err
 		}
 		if e.findOne && !e.partial() {
-			return earlyExit{}
+			return earlyExit{n: 1}
 		}
 		return nil
 	}
@@ -3124,8 +3129,10 @@ func suppressEarlyExit(err error) error {
 	if err == nil {
 		return nil
 	}
-	if _, ok := err.(earlyExit); ok {
-		return nil
+	if ee, ok := err.(earlyExit); !ok {
+		return err
+	} else if ee.n > 1 {
+		return earlyExit{n: ee.n - 1}
 	}
-	return err
+	return nil
 }
