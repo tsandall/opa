@@ -35,15 +35,15 @@ require (
 	github.com/xeipuuv/gojsonreference v0.0.0-20180127040603-bd5ef7bd5415
 	github.com/yashtewari/glob-intersection v0.0.0-20180916065949-5c77d914dd0b
 	go.opentelemetry.io/contrib/instrumentation/net/http/otelhttp v0.29.0
-	go.opentelemetry.io/otel v1.4.1
-	go.opentelemetry.io/otel/exporters/otlp/otlptrace v1.4.1
-	go.opentelemetry.io/otel/exporters/otlp/otlptrace/otlptracegrpc v1.4.1
-	go.opentelemetry.io/otel/sdk v1.4.1
-	go.opentelemetry.io/otel/trace v1.4.1
+	go.opentelemetry.io/otel v1.5.0
+	go.opentelemetry.io/otel/exporters/otlp/otlptrace v1.5.0
+	go.opentelemetry.io/otel/exporters/otlp/otlptrace/otlptracegrpc v1.5.0
+	go.opentelemetry.io/otel/sdk v1.5.0
+	go.opentelemetry.io/otel/trace v1.5.0
 	go.uber.org/automaxprocs v1.4.0
 	golang.org/x/net v0.0.0-20211111083644-e5c967477495
 	golang.org/x/time v0.0.0-20210220033141-f8bda1e9f3ba
-	google.golang.org/grpc v1.44.0
+	google.golang.org/grpc v1.45.0
 	gopkg.in/check.v1 v1.0.0-20200227125254-8fa46927fb4f // indirect
 	gopkg.in/yaml.v2 v2.4.0
 )
