@@ -30,17 +30,17 @@ require (
 	github.com/sirupsen/logrus v1.8.1
 	github.com/spf13/cobra v1.4.0
 	github.com/spf13/pflag v1.0.5
-	github.com/stretchr/testify v1.7.1
+	github.com/stretchr/testify v1.8.2
 	github.com/xeipuuv/gojsonpointer v0.0.0-20190905194746-02993c407bfb // indirect
 	github.com/xeipuuv/gojsonreference v0.0.0-20180127040603-bd5ef7bd5415
 	github.com/yashtewari/glob-intersection v0.1.0
 	go.opencensus.io v0.23.0 // indirect
 	go.opentelemetry.io/contrib/instrumentation/net/http/otelhttp v0.31.0
-	go.opentelemetry.io/otel v1.6.3
+	go.opentelemetry.io/otel v1.14.0
 	go.opentelemetry.io/otel/exporters/otlp/otlptrace v1.6.3
 	go.opentelemetry.io/otel/exporters/otlp/otlptrace/otlptracegrpc v1.6.3
 	go.opentelemetry.io/otel/sdk v1.6.3
-	go.opentelemetry.io/otel/trace v1.6.3
+	go.opentelemetry.io/otel/trace v1.14.0
 	go.uber.org/automaxprocs v1.5.1
 	golang.org/x/net v0.0.0-20211111083644-e5c967477495
 	golang.org/x/text v0.3.7 // indirect
