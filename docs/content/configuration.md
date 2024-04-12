@@ -19,7 +19,7 @@ opa run -s -c config.yaml
 The file can be either JSON or YAML format.
 
 
-#### Example
+## Example
 
 ```yaml
 services:
@@ -86,7 +86,7 @@ server:
         compression_level: 9
 ```
 
-#### Environment Variable Substitution
+## Environment Variable Substitution
 > Only supported with the OPA runtime (`opa run`).
 
 Environment variables referenced with the `${...}` notation within the configuration
@@ -111,7 +111,7 @@ file is loaded by the OPA runtime.
 > If the variable is undefined then an empty string (`""`) is substituted. It will __not__
 raise an error.
 
-#### CLI Runtime Overrides
+## CLI Runtime Overrides
 > Only supported with the OPA runtime (`opa run`).
 
 Using `opa run` there are CLI options to explicitly set config values. These will override
@@ -166,8 +166,8 @@ opa run --set-file "services.acmecorp.credentials.bearer.token=/var/run/secrets/
 
 It will read the contents of the file and set the config value with the token.
 
-##### Override Limitations
-###### Lists
+### Override Limitations with Lists
+
 If using arrays/lists in the configuration the `--set` and `--set-file` overrides will not be able to
 patch sub-objects of the list. They will overwrite the entire index with the new object.
 
@@ -198,7 +198,7 @@ Because the entire `0` index was overwritten.
 
 It is highly recommended to use objects/maps instead of lists for configuration for this reason.
 
-##### Remote Bundles Override Shorthand
+### Remote Bundles Override Shorthand
 
 When running the server to quickly try a remote public bundle — such as those published from the
 [Rego Playground](https://play.openpolicyagent.org), you may find it convenient to provide the URL of the
@@ -217,7 +217,8 @@ opa run -s --set "services.cli1.url=https://example.com" \
            --set "bundles.cli1.persist=true"
 ```
 
-###### Empty objects
+### Empty Objects
+
 If you need to set an empty object with the CLI overrides, for example with plugin configuration like:
 
 ```yaml
@@ -234,7 +235,7 @@ You can do this by setting the value with `null`. For example:
 opa run --set "decision_logs.plugin=my_plugin" --set "plugins.my_plugin=null"
 ```
 
-###### Keys with Special Characters
+### Keys with Special Characters
 
 If you have a key which contains a special character (`=`, `[`, `,`, `.`), like `opa.example.com`, and want to use
 the `--set` or `--set-file` options you will need to escape the character with a backslash (`\`).
@@ -264,7 +265,7 @@ _or_
 
 Where the end result passed into OPA still has the `\.` preserved.
 
-#### Services
+## Services
 
 Services represent endpoints that implement one or more control plane APIs
 such as the Bundle or Status APIs. OPA configuration files may contain
@@ -281,9 +282,10 @@ multiple services.
 | `services[_].allow_insecure_tls` | `bool` | No | Allow insecure TLS. |
 | `services[_].type` | `string` | No (default: empty) | Optional parameter that allows to use an "OCI" service type. This will allow bundle and discovery plugins to download bundles from an OCI registry. |
 
-> Services can be defined as an array or object. When defined as an object, the
-> object keys override the `services[_].name` fields.
-> For example:
+Services can be defined as an array or object. When defined as an object, the
+object keys override the `services[_].name` fields. For example:
+
+
 > ```yaml
 > services:
 >   s1:
@@ -303,32 +305,7 @@ multiple services.
 Each service may optionally specify a credential mechanism by which OPA will authenticate
 itself to the service.
 
-##### Example
-
-Using an OCI service type to download a bundle from an OCI repository.
-
-```yaml
-services:
-  ghcr-registry:
-    url: https://ghcr.io
-    type: oci
-
-bundles:
-  authz:
-    service: ghcr-registry
-    resource: ghcr.io/${ORGANIZATION}/${REPOSITORY}:${TAG}
-    persist: true
-    polling:
-      min_delay_seconds: 60
-      max_delay_seconds: 120
-
-persistence_directory: ${PERSISTENCE_PATH}
-```
-
-When using an OCI service type the downloader uses the persistence path to store the layers of the downloaded repository. This storage path should be maintained by the user.
-If persistence is not configured the OCI downloader will store the layers in the system's temporary directory to allow automatic cleanup on system restart.
-
-#### Bearer Token
+### Bearer Token
 
 OPA will authenticate using the specified bearer token and schema; to enable bearer token
 authentication, either the token or the path to the token must be specified. If the latter is provided, on each request OPA will re-read the token from the file and use that token for authentication.
@@ -594,9 +571,7 @@ see description for `services[_].credentials.s3_signing`. Currently supported me
 | `services[_].credentials.s3_signing.assume_role_credentials.session_name` | `string` | No | The session name used to identify the assumed role session. Default: `open-policy-agent` |
 | `services[_].credentials.s3_signing.assume_role_credentials.aws_domain` | `string` | No | The AWS domain name to use. Default: `amazonaws.com`. Can also be set via the `AWS_DOMAIN` environment variable (config takes precedence) |
 
-##### Example
-
-Using Assume Role Credentials type with EC2 Metadata Credentials signing plugin.
+The following is an example using Assume Role Credentials type with EC2 Metadata Credentials signing plugin:
 
 ```yaml
 services:
@@ -727,6 +702,67 @@ bundles:
       max_delay_seconds: 120
 ```
 
+### OCI Repositories
+
+When using a private image from an OCI registry you need to specify an authentication method. Supported authentication methods are listed in the [Services](#services) section. The Azure managed identity plugin is not supported at this point in time.
+
+Examples of setting credentials for pulling private images:
+*AWS ECR* private images usually require at least basic authentication. The credentials to authenticate can be obtained using the AWS CLI command `aws ecr get-login` and those can be passed to the service configuration as basic bearer credentials as follows:
+```yaml
+credentials:
+  bearer:
+    scheme: "Basic"
+    token: "<username>:<password>"
+```
+
+Other AWS authentication methods also work:
+```yaml
+credentials:
+  s3_signing:
+    service: "ecr"
+    metadata_credentials:
+      aws_region: us-east-1
+```
+
+Note, that the authentication method `s3_signing` does work for
+signing requests to other AWS services.
+
+A special case is that bearer authentication works differently to normal service authentication. The OCI downloader base64-encodes the credentials for you so that they need to be supplied in plain text.
+
+For *GHCR* (Github Container Registry) you can use a developer PAT (personal access token) when downloading a private image. These can be supplied as:
+```yaml
+credentials:
+  bearer:
+    scheme: "Bearer"
+    token: "<PAT>"
+```
+
+The following is a complete exmaple using an OCI service type to download a bundle from an OCI repository.
+
+```yaml
+services:
+  ghcr-registry:
+    url: https://ghcr.io
+    type: oci
+
+bundles:
+  authz:
+    service: ghcr-registry
+    resource: ghcr.io/${ORGANIZATION}/${REPOSITORY}:${TAG}
+    persist: true
+    polling:
+      min_delay_seconds: 60
+      max_delay_seconds: 120
+
+persistence_directory: ${PERSISTENCE_PATH}
+```
+
+When using an OCI service type the downloader uses the persistence path to store
+the layers of the downloaded repository. This storage path should be maintained
+by the user. If persistence is not configured the OCI downloader will store the
+layers in the system's temporary directory to allow automatic cleanup on system
+restart.
+
 #### Custom Plugin
 
 If none of the existing credential options work for a service, OPA can authenticate using a custom plugin, enabling support for any authentication scheme.
@@ -826,42 +862,6 @@ func init() {
 	runtime.RegisterPlugin("my_custom_auth", &PluginFactory{})
 }
 
-```
-
-### Using private image from OCI repositories
-
-When using a private image from an OCI registry you need to specify an authentication method. Supported authentication methods are listed in the [Services](#services) section. The Azure managed identity plugin
-is not supported at this point in time.
-
-Examples of setting credentials for pulling private images:
-*AWS ECR* private images usually require at least basic authentication. The credentials to authenticate can be obtained using the AWS CLI command `aws ecr get-login` and those can be passed to the service configuration as basic bearer credentials as follows:
-```yaml
-credentials:
-  bearer:
-    scheme: "Basic"
-    token: "<username>:<password>"
-```
-
-Other AWS authentication methods also work:
-```yaml
-credentials:
-  s3_signing:
-    service: "ecr"
-    metadata_credentials:
-      aws_region: us-east-1
-```
-
-Note, that the authentication method `s3_signing` does work for
-signing requests to other AWS services.
-
-A special case is that bearer authentication works differently to normal service authentication. The OCI downloader base64-encodes the credentials for you so that they need to be supplied in plain text.
-
-For *GHCR* (Github Container Registry) you can use a developer PAT (personal access token) when downloading a private image. These can be supplied as:
-```yaml
-credentials:
-  bearer:
-    scheme: "Bearer"
-    token: "<PAT>"
 ```
 
 ### Miscellaneous
