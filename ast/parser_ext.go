@@ -12,6 +12,7 @@ package ast
 
 import (
 	"bytes"
+	"crypto/md5"
 	"errors"
 	"fmt"
 	"strings"
@@ -477,7 +478,15 @@ func ParseModuleWithOpts(filename, input string, popts ParserOptions) (*Module, 
 	if err != nil {
 		return nil, err
 	}
-	return parseModule(filename, stmts, comments, popts.RegoVersion)
+
+	module, err := parseModule(filename, stmts, comments, popts.RegoVersion)
+	if err != nil {
+		return nil, err
+	}
+
+	sum := md5.Sum([]byte(input))
+	module.hash = sum[:]
+	return module, nil
 }
 
 // ParseBody returns exactly one body.

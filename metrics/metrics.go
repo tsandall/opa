@@ -19,21 +19,22 @@ import (
 
 // Well-known metric names.
 const (
-	BundleRequest       = "bundle_request"
-	ServerHandler       = "server_handler"
-	ServerQueryCacheHit = "server_query_cache_hit"
-	SDKDecisionEval     = "sdk_decision_eval"
-	RegoQueryCompile    = "rego_query_compile"
-	RegoQueryEval       = "rego_query_eval"
-	RegoQueryParse      = "rego_query_parse"
-	RegoModuleParse     = "rego_module_parse"
-	RegoDataParse       = "rego_data_parse"
-	RegoModuleCompile   = "rego_module_compile"
-	RegoPartialEval     = "rego_partial_eval"
-	RegoInputParse      = "rego_input_parse"
-	RegoLoadFiles       = "rego_load_files"
-	RegoLoadBundles     = "rego_load_bundles"
-	RegoExternalResolve = "rego_external_resolve"
+	BundleRequest         = "bundle_request"
+	ServerHandler         = "server_handler"
+	ServerQueryCacheHit   = "server_query_cache_hit"
+	SDKDecisionEval       = "sdk_decision_eval"
+	RegoQueryCompile      = "rego_query_compile"
+	RegoQueryEval         = "rego_query_eval"
+	RegoQueryParse        = "rego_query_parse"
+	RegoModuleParse       = "rego_module_parse"
+	RegoDataParse         = "rego_data_parse"
+	RegoModuleCompile     = "rego_module_compile"
+	RegoModuleCompileSkip = "rego_module_compile_skip"
+	RegoPartialEval       = "rego_partial_eval"
+	RegoInputParse        = "rego_input_parse"
+	RegoLoadFiles         = "rego_load_files"
+	RegoLoadBundles       = "rego_load_bundles"
+	RegoExternalResolve   = "rego_external_resolve"
 )
 
 // Info contains attributes describing the underlying metrics provider.

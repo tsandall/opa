@@ -152,6 +152,7 @@ type (
 		Comments    []*Comment     `json:"comments,omitempty"`
 		stmts       []Statement
 		regoVersion RegoVersion
+		hash        []byte
 	}
 
 	// Comment contains the raw text from the comment in the definition.

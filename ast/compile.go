@@ -5,6 +5,7 @@
 package ast
 
 import (
+	"bytes"
 	"errors"
 	"fmt"
 	"io"
@@ -33,6 +34,11 @@ type Compiler struct {
 	// If there are one or more errors, the compilation process is considered
 	// "failed".
 	Errors Errors
+
+	// ModuleHash contains checksums for the modules that were passed into the
+	// compiler. Note, the checksums are not recomputed if any modifications are
+	// made to the modules during compilation.
+	ModuleHash ModuleHash
 
 	// Modules contains the compiled modules. The compiled modules are the
 	// output of the compilation process. If the compilation process failed,
@@ -499,6 +505,7 @@ func (c *Compiler) Compile(modules map[string]*Module) {
 
 	c.init()
 
+	c.ModuleHash = NewModuleHash(modules)
 	c.Modules = make(map[string]*Module, len(modules))
 	c.sorted = make([]string, 0, len(modules))
 
@@ -5814,6 +5821,37 @@ func rewriteVarsInRef(vars ...map[Var]Var) varRewriter {
 		})
 		return i.(Ref)
 	}
+}
+
+// ModuleHash represents a collection of policy module checksums. The checksums
+// are stored on the compiler and can be used by callers to avoid recompilation.
+type ModuleHash map[string][]byte
+
+// NewModuleHash returns a collection of checksums for the provided modules.
+func NewModuleHash(modules map[string]*Module) ModuleHash {
+	mh := make(ModuleHash, len(modules))
+	for k := range modules {
+		mh[k] = modules[k].hash
+	}
+	return mh
+}
+
+// Equal returns true if mh is identical to other. If either collection contains
+// a nil hash, the collections are non-equal. Nil hashes would represent modules
+// that were not constructed via the parser (and therefore cannot be compared
+// using hashes.)
+func (mh ModuleHash) Equal(other ModuleHash) bool {
+	if len(mh) != len(other) {
+		return false
+	}
+
+	for k := range mh {
+		if v2, ok := other[k]; !ok || mh[k] == nil || v2 == nil || !bytes.Equal(mh[k], v2) {
+			return false
+		}
+	}
+
+	return true
 }
 
 // NOTE(sr): This is duplicated with compile/compile.go; but moving it into another location

@@ -596,12 +596,18 @@ func (p *Plugin) activate(ctx context.Context, name string, b *bundle.Bundle) er
 
 		var activateErr error
 
+		var mh ast.ModuleHash
+		if c := p.manager.GetCompiler(); c != nil {
+			mh = c.ModuleHash
+		}
+
 		opts := &bundle.ActivateOpts{
 			Ctx:           ctx,
 			Store:         p.manager.Store,
 			Txn:           txn,
 			TxnCtx:        params.Context,
 			Compiler:      compiler,
+			PreviousHash:  mh,
 			Metrics:       p.status[name].Metrics,
 			Bundles:       map[string]*bundle.Bundle{name: b},
 			ParserOptions: p.manager.ParserOptions(),
@@ -627,7 +633,7 @@ func (p *Plugin) activate(ctx context.Context, name string, b *bundle.Bundle) er
 			activateErr = bundle.ActivateLegacy(opts)
 		}
 
-		plugins.SetCompilerOnContext(params.Context, compiler)
+		plugins.SetCompilerOnContext(params.Context, opts.Compiler)
 
 		resolvers, err := bundleUtils.LoadWasmResolversFromStore(ctx, p.manager.Store, txn, nil)
 		if err != nil {

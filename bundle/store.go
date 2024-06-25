@@ -297,6 +297,7 @@ type ActivateOpts struct {
 	Txn                      storage.Transaction
 	TxnCtx                   *storage.Context
 	Compiler                 *ast.Compiler
+	PreviousHash             ast.ModuleHash
 	Metrics                  metrics.Metrics
 	Bundles                  map[string]*Bundle     // Optional
 	ExtraModules             map[string]*ast.Module // Optional
@@ -454,7 +455,7 @@ func activateBundles(opts *ActivateOpts) error {
 		remainingAndExtra[name] = mod
 	}
 
-	err = compileModules(opts.Compiler, opts.Metrics, snapshotBundles, remainingAndExtra, opts.legacy, opts.AuthorizationDecisionRef)
+	err = compileModules(opts.Compiler, opts.PreviousHash, opts.Metrics, snapshotBundles, remainingAndExtra, opts.legacy, opts.AuthorizationDecisionRef)
 	if err != nil {
 		return err
 	}
@@ -759,7 +760,7 @@ func writeData(ctx context.Context, store storage.Store, txn storage.Transaction
 	return nil
 }
 
-func compileModules(compiler *ast.Compiler, m metrics.Metrics, bundles map[string]*Bundle, extraModules map[string]*ast.Module, legacy bool, authorizationDecisionRef ast.Ref) error {
+func compileModules(compiler *ast.Compiler, previousHash ast.ModuleHash, m metrics.Metrics, bundles map[string]*Bundle, extraModules map[string]*ast.Module, legacy bool, authorizationDecisionRef ast.Ref) error {
 
 	m.Timer(metrics.RegoModuleCompile).Start()
 	defer m.Timer(metrics.RegoModuleCompile).Stop()
@@ -787,6 +788,11 @@ func compileModules(compiler *ast.Compiler, m metrics.Metrics, bundles map[strin
 				modules[name] = module
 			}
 		}
+	}
+
+	if previousHash.Equal(ast.NewModuleHash(modules)) {
+		m.Counter(metrics.RegoModuleCompileSkip).Incr()
+		return nil
 	}
 
 	if compiler.Compile(modules); compiler.Failed() {
