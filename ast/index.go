@@ -431,20 +431,23 @@ func (tr *trieTraversalResult) Add(t *trieNode) {
 		}
 		tr.unordered[root] = append(nodes, node)
 	}
-	if t.values != nil {
-		t.values.Foreach(func(v *Term) {
-			if v.IsGround() && tr.exist == nil || tr.exist.Equal(v) {
-				tr.exist = v
-				return
-			}
-			tr.multiple = true
-		})
+	if t.multiple {
+		tr.multiple = true
 	}
+	if tr.multiple || t.value == nil {
+		return
+	}
+	if t.value.IsGround() && tr.exist == nil || tr.exist.Equal(t.value) {
+		tr.exist = t.value
+		return
+	}
+	tr.multiple = true
 }
 
 type trieNode struct {
 	ref       Ref
-	values    Set
+	value     *Term
+	multiple  bool
 	mappers   []*valueMapper
 	next      *trieNode
 	any       *trieNode
@@ -503,10 +506,8 @@ func (node *trieNode) String() string {
 	if len(node.mappers) > 0 {
 		flags = append(flags, fmt.Sprintf("%d mapper(s)", len(node.mappers)))
 	}
-	if node.values != nil {
-		if l := node.values.Len(); l > 0 {
-			flags = append(flags, fmt.Sprintf("%d value(s)", l))
-		}
+	if node.value != nil {
+		flags = append(flags, "value exists")
 	}
 	return strings.Join(flags, " ")
 }
@@ -514,13 +515,12 @@ func (node *trieNode) String() string {
 func (node *trieNode) append(prio [2]int, rule *Rule) {
 	node.rules = append(node.rules, &ruleNode{prio, rule})
 
-	if node.values != nil && rule.Head.Value != nil {
-		node.values.Add(rule.Head.Value)
-		return
+	if node.value != nil && rule.Head.Value != nil && !node.value.Equal(rule.Head.Value) {
+		node.multiple = true
 	}
 
-	if node.values == nil && rule.Head.DocKind() == CompleteDoc {
-		node.values = NewSet(rule.Head.Value)
+	if node.value == nil && rule.Head.DocKind() == CompleteDoc {
+		node.value = rule.Head.Value
 	}
 }
 
