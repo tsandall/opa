@@ -94,7 +94,7 @@ func TestBaseDocEqIndexing(t *testing.T) {
 		input.x = 3
 		input.y = 4
 	}
-		
+
 
 	scalars if {
 		input.x = 0

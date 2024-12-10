@@ -159,7 +159,7 @@ func (i *baseDocEqIndex) Lookup(resolver ValueResolver) (*IndexResult, error) {
 		}
 	}
 
-	result.EarlyExit = tr.values.Len() == 1 && tr.values.Slice()[0].IsGround()
+	result.EarlyExit = !tr.multiple
 
 	return result, nil
 }
@@ -191,7 +191,7 @@ func (i *baseDocEqIndex) AllRules(_ ValueResolver) (*IndexResult, error) {
 		}
 	}
 
-	result.EarlyExit = tr.values.Len() == 1 && tr.values.Slice()[0].IsGround()
+	result.EarlyExit = !tr.multiple
 
 	return result, nil
 }
@@ -412,13 +412,13 @@ type trieWalker interface {
 type trieTraversalResult struct {
 	unordered map[int][]*ruleNode
 	ordering  []int
-	values    Set
+	exist     *Term
+	multiple  bool
 }
 
 func newTrieTraversalResult() *trieTraversalResult {
 	return &trieTraversalResult{
 		unordered: map[int][]*ruleNode{},
-		values:    NewSet(),
 	}
 }
 
@@ -432,7 +432,13 @@ func (tr *trieTraversalResult) Add(t *trieNode) {
 		tr.unordered[root] = append(nodes, node)
 	}
 	if t.values != nil {
-		t.values.Foreach(func(v *Term) { tr.values.Add(v) })
+		t.values.Foreach(func(v *Term) {
+			if v.IsGround() && tr.exist == nil || tr.exist.Equal(v) {
+				tr.exist = v
+				return
+			}
+			tr.multiple = true
+		})
 	}
 }
 
