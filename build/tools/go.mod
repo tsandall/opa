@@ -11,7 +11,7 @@ tool (
 require (
 	github.com/akavel/rsrc v0.10.2 // indirect
 	github.com/josephspurrier/goversioninfo v1.7.0 // indirect
-	github.com/rogpeppe/go-internal v1.14.1 // indirect
+	github.com/rogpeppe/go-internal v1.15.0 // indirect
 	golang.org/x/mod v0.35.0 // indirect
 	golang.org/x/sync v0.20.0 // indirect
 	golang.org/x/sys v0.43.0 // indirect
